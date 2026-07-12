@@ -1,0 +1,22 @@
+# systemd unit for Tramice721 (optional, spec §12 M6).
+# Install:
+#   sudo cp deploy/tramice721.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now tramice721
+# Edit User/WorkingDirectory to match your host.
+
+[Unit]
+Description=Tramice721 Discord bot
+After=network-online.target ollama.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sensorica
+WorkingDirectory=/home/sensorica/Development/DiscordBot/discord-ai-bot
+ExecStart=/home/sensorica/Development/DiscordBot/discord-ai-bot/venv/bin/python -m bot.main
+Environment=LOG_JSON=1
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

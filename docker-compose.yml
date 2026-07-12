@@ -1,0 +1,29 @@
+# Optional local stack (spec §12 M6): Ollama + the Tramice721 bot.
+# The MCP servers run as stdio subprocesses inside the bot container.
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    # For GPU: add `deploy.resources.reservations.devices` (nvidia) as needed.
+
+  bot:
+    build: .
+    depends_on:
+      - ollama
+    environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN}
+      OLLAMA_HOST: http://ollama:11434
+      GUILD_ID: ${GUILD_ID:-}
+      ADMIN_ROLE_IDS: ${ADMIN_ROLE_IDS:-}
+      LOG_JSON: "1"
+    volumes:
+      - ./data:/app/data
+      - ./docs:/app/docs
+      - ./config.yaml:/app/config.yaml
+
+volumes:
+  ollama:

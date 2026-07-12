@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual environment
+venv/
+.venv/
+
+# Secrets
+.env
+
+# Local runtime data (SQLite DBs, Chroma vector store, audit log)
+data/
+audit.log
+
+# OS / editor
+.DS_Store
+*.swp

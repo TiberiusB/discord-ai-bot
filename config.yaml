@@ -1,0 +1,48 @@
+bot:
+  name: "Tramice721"
+  prefix: "!ai"
+  locale_default: fr
+  timezone: America/Montreal
+
+llm:
+  model: qwen2.5:7b-instruct
+  temperature: 0.7
+  max_tokens: 2048
+  embed_model: nomic-embed-text
+
+channels:
+  log_mode: allowlist          # allowlist | denylist | all
+  allowlist: []
+  denylist: []
+  summary_channel_id: null
+
+features:
+  game_simulation: true
+  matchmaking: true
+  web_fetch: false
+  everyone_announcements: false
+
+rate_limit:
+  per_user_cooldown_sec: 10
+  per_channel_cooldown_sec: 5
+  max_queue_depth: 20
+  max_message_chars: 4000
+
+rag:
+  chunk_size: 800
+  chunk_overlap: 120
+  collections: [docs, history]
+
+privacy:
+  dm_always_private: true
+  confidences_never_shared: true
+
+social_norms_defaults:
+  dm_always_private: true
+  transaction_details_general: true
+  personal_addresses_hidden: true
+  confidences_never_shared: true
+
+fetch_allowlist:
+  - latramice.net
+  - la-tramice.net
