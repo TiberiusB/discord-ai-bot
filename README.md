@@ -1,22 +1,51 @@
 # Tramice721 — Discord AI bot
 
-Local-first, model-swappable Discord bot that **is Tramice721** — the social AI
-assistant of the *Laboratoire tramiciel n°721* playtest of **La Guilde des
-Tramarades**. She simulates the personal *tramice* console: a warm, feminine,
-French (Québec) persona that helps trammers connect, learn the game, and run the
-weekly HOP cycle.
+## Introduction
+### What this project is
 
-The bot runs entirely on your machine:
+**Tramice721** is a local-first Discord bot that **is** the social AI assistant
+from *La Guilde des Tramarades* — not a generic chatbot wrapper. She simulates
+the personal **tramice** console: a warm, feminine, French (Québec) persona that
+helps **trammers** (community members) connect, learn the game, and participate
+in the weekly HOP cycle during the *Laboratoire tramiciel n°721* playtest.
 
-- **[Ollama](https://ollama.com)** for the LLM and embeddings
-- **[LangGraph](https://github.com/langchain-ai/langgraph)** react agent with per-thread memory
+The bot runs entirely on your own hardware:
+
+- **Ollama** for chat and embeddings (default: `qwen2.5:7b-instruct`, `nomic-embed-text`)
+- **LangGraph** react agent with per-thread conversational memory
+- **Chroma** RAG over project documents and (optionally) indexed salon history
+- **SQLite** for domain data, message logs, and agent checkpoints
 - **MCP tools** (stdio) for server overview and semantic search
-- **Chroma** RAG over project docs and (optionally) chat history
-- **SQLite** for domain data, message log, and agent checkpoints
-- **APScheduler** for nightly indexing, daily summaries, and the weekly game cycle
 
-**Principle:** *L'IA propose, la communauté dispose.* Mutating actions (HOP
-placements, events, votes) always require explicit human confirmation.
+Design principle: ***L'IA propose, la communauté dispose.*** The bot proposes
+connections, events, HOP placements, and votes — humans always confirm before
+anything mutating is committed.
+
+### What we want to build
+
+A **service-oriented monolith**: one deployable Python process that exposes ten
+logical services (identity, matchmaking, coordination, game, ecosystem-mapping,
+governance, knowledge, community-memory, platform, persona) through a single
+LangGraph agent backed by slash commands, prefix/mention triggers, and scheduled
+jobs.
+
+The target is a **playtest-ready community assistant** for a Discord server with
+under 100 members — not a production financial ledger, not a graphical Mondo UI,
+and not multi-server sync (all explicitly out of scope for v1).
+
+### How we will use it
+
+1. **Operators** deploy the bot on a local machine (venv, systemd, or Docker
+   Compose), configure `.env` and `config.yaml`, and invite it to the lab Discord
+   server.
+2. **Trammers** talk to Tramice721 in allowlisted salons (`!ai`, `@mention`,
+   slash commands) or in DMs (personal-tramice mode).
+3. **The bot** answers game questions from RAG, maintains volios and Échos,
+   proposes events and matchmaking, simulates the weekly HOP cycle, and posts
+   scheduled summaries and game announcements.
+4. **Admins** swap models, reindex documents, adjust social norms, and check
+   health via slash commands.
+
 
 | Doc | Purpose |
 |-----|---------|
@@ -24,6 +53,7 @@ placements, events, votes) always require explicit human confirmation.
 | [`docs/specifications.md`](docs/specifications.md) | How it is built |
 | [`docs/implementation_status.md`](docs/implementation_status.md) | What is built today |
 | [`docs/planning.md`](docs/planning.md) | Gaps and next development phases |
+
 
 **Status:** Application code for milestones M0–M6 is in place; pre-Discord
 hardening is done. Live guild testing is the next step — see
