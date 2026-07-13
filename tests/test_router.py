@@ -65,3 +65,23 @@ async def test_slash_bypasses_cooldown(router) -> None:
     await r.submit(_make_req())
     result = await r.submit(_make_req(trigger="slash"))
     assert result.status is SubmitStatus.ACCEPTED
+
+
+@pytest.mark.asyncio
+async def test_queue_full_returns_message_without_delivering() -> None:
+    """Queue-full rejections are returned to the caller; router must not deliver."""
+    delivered: list[str] = []
+
+    async def responder(_req):
+        return "never"
+
+    async def deliver(_req, text):
+        delivered.append(text)
+
+    r = Router(responder, deliver, max_queue_depth=1)
+    # Worker not started — queue stays full after first enqueue.
+    await r.submit(_make_req(user_id="u1"))
+    result = await r.submit(_make_req(user_id="u2", trigger="slash"))
+    assert result.status is SubmitStatus.QUEUE_FULL
+    assert result.message is not None
+    assert delivered == []

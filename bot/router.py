@@ -161,7 +161,7 @@ class Router:
         try:
             self._queue.put_nowait(req)
         except asyncio.QueueFull:
-            await self._deliver(req, BUSY_MESSAGE)
+            # Caller delivers rejection messages (same as cooldown path).
             return SubmitResult(status=SubmitStatus.QUEUE_FULL, message=BUSY_MESSAGE)
         return SubmitResult(status=SubmitStatus.ACCEPTED)
 
