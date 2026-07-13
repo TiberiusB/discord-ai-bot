@@ -12,6 +12,8 @@ llm:
 
 channels:
   log_mode: allowlist          # allowlist | denylist | all
+  # REQUIRED for salon access: add Discord channel IDs before going live.
+  # Empty allowlist = DMs only (no salon triggers or logging).
   allowlist: []
   denylist: []
   summary_channel_id: null

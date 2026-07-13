@@ -46,6 +46,10 @@ async def run() -> None:
         )
         return
 
+    from bot.startup import log_launch_warnings
+
+    log_launch_warnings(settings)
+
     db = build_database(settings)
     history = HistoryStore(db)
     ollama = OllamaClient(
@@ -81,6 +85,8 @@ async def run() -> None:
         await bot.start(settings.discord_token)
     finally:
         await bot.close()
+        if hasattr(responder, "aclose"):
+            await responder.aclose()
         db.close()
 
 

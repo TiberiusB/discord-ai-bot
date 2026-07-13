@@ -41,7 +41,7 @@ def build_services(settings, db: Database, history: HistoryStore) -> Services:
 
     services = Services(
         identity=IdentityService(db),
-        memory=MemoryService(db, history),
+        memory=MemoryService(db, history, settings),
     )
 
     # Knowledge / RAG (M3).

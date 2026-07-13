@@ -15,8 +15,19 @@ The bot runs entirely on your machine:
 - **SQLite** for domain data, message log, and agent checkpoints
 - **APScheduler** for nightly indexing, daily summaries, and the weekly game cycle
 
-Design docs: [`docs/requirements.md`](docs/requirements.md) (what) ·
-[`docs/specifications.md`](docs/specifications.md) (how).
+**Principle:** *L'IA propose, la communauté dispose.* Mutating actions (HOP
+placements, events, votes) always require explicit human confirmation.
+
+| Doc | Purpose |
+|-----|---------|
+| [`docs/requirements.md`](docs/requirements.md) | What the bot must do |
+| [`docs/specifications.md`](docs/specifications.md) | How it is built |
+| [`docs/implementation_status.md`](docs/implementation_status.md) | What is built today |
+| [`docs/planning.md`](docs/planning.md) | Gaps and next development phases |
+
+**Status:** Application code for milestones M0–M6 is in place; pre-Discord
+hardening is done. Live guild testing is the next step — see
+[Before you go live](#before-you-go-live).
 
 ---
 
@@ -49,9 +60,6 @@ Discord (salons · DMs · slash commands)
   app · history · checkpoints     docs · history
 ```
 
-**Principle:** *L'IA propose, la communauté dispose.* Mutating actions (HOP
-placements, events, votes) always require explicit human confirmation.
-
 ---
 
 ## Requirements
@@ -67,6 +75,8 @@ Default models:
 
 - **Chat / tools:** `qwen2.5:7b-instruct`
 - **Embeddings:** `nomic-embed-text`
+
+Target deployment: **single Discord guild**, under **100 members** (no sharding).
 
 ---
 
@@ -92,7 +102,7 @@ ollama pull nomic-embed-text
 Optional experiments: `mistral`, `gemma2:9b`, `phi3.5`, `deepseek-r1` (weaker at
 tool calling on CPU).
 
-### 3. Configure secrets
+### 3. Configure secrets and channels
 
 ```bash
 cp .env.example .env
@@ -107,8 +117,9 @@ ADMIN_ROLE_IDS=role_id_1,role_id_2   # optional; guild owner is always admin
 OLLAMA_HOST=http://127.0.0.1:11434
 ```
 
-Edit `config.yaml` for channel policy, summary channel, and feature flags (see
-[Configuration](#configuration)).
+Edit `config.yaml` — **add at least one channel ID** to `channels.allowlist`
+before testing in salons (see [Configuration](#configuration)). DMs work without
+an allowlist.
 
 ### 4. Initialize data
 
@@ -138,17 +149,19 @@ Then set `llm.model: tramice721` in `config.yaml`, or swap at runtime with
 
 ---
 
-## Discord Developer Portal (one-time)
+## Before you go live
 
-1. [Discord Developer Portal](https://discord.com/developers/applications) →
-   **New Application** → **Bot** → copy token → `DISCORD_TOKEN`.
-2. Enable intents: **Message Content**, **Server Members**.
-3. OAuth2 URL generator: scopes `bot` + `applications.commands`.
-4. Bot permissions: Send Messages, Read Message History, Use Slash Commands.
-5. Invite the bot to your server; copy the server ID → `GUILD_ID`.
+Complete this checklist before opening the bot to the wider playtest group. Details
+in [`docs/planning.md`](docs/planning.md) Phase 0.
 
-Slash commands sync to `GUILD_ID` on startup (instant). Without `GUILD_ID`,
-global sync can take up to an hour.
+1. [Discord Developer Portal](https://discord.com/developers/applications): create
+   app, enable **Message Content** + **Server Members** intents, invite with
+   `bot` + `applications.commands` scopes.
+2. Set `DISCORD_TOKEN` and `GUILD_ID` in `.env`.
+3. Add salon channel IDs to `channels.allowlist` in `config.yaml`.
+4. Set `channels.summary_channel_id` if you want daily summaries or game posts.
+5. Post the AI-logging notice from [`docs/ai_logging_notice.md`](docs/ai_logging_notice.md).
+6. Run `pytest tests/ -q`, then start the bot and smoke-test `/ask`, a DM, and `/health`.
 
 ---
 
@@ -161,7 +174,8 @@ global sync can take up to an hour.
 | DM | Open a direct message (personal-tramice mode) |
 | Slash | `/ask question:Qu'est-ce qu'un HOP ?` |
 
-She does **not** reply to other bots.
+She does **not** reply to other bots. Prefix and mention requests show a cooldown
+message when rate-limited; slash commands bypass user cooldown.
 
 ---
 
@@ -182,7 +196,7 @@ She does **not** reply to other bots.
 | `/vote` | List, open, or cast votes (with confirmation) |
 | `/signalement` | File a graduated report (confidential) |
 | `/normes` | Show current social norms |
-| `/forgetme` | Delete your stored messages and profile data |
+| `/forgetme` | Delete your stored messages, profile, checkpoints, and RAG fragments |
 
 ### Admin
 
@@ -212,26 +226,30 @@ llm:
   embed_model: nomic-embed-text
 
 channels:
-  log_mode: allowlist    # allowlist | denylist | all
-  allowlist: []          # empty = act everywhere (except denylist)
-  summary_channel_id: null   # set for daily summaries + game announcements
+  log_mode: allowlist          # allowlist | denylist | all
+  allowlist: []                # REQUIRED for salon access — empty = DMs only
+  denylist: []
+  summary_channel_id: null     # daily summaries + game announcements
 
 features:
   game_simulation: true
   matchmaking: true
-  web_fetch: false       # optional MCP fetch for latramice.net
+  web_fetch: false             # optional MCP fetch for latramice.net
 
 rate_limit:
   per_user_cooldown_sec: 10
   max_queue_depth: 20
 ```
 
+In **allowlist** mode, an empty `allowlist` means the bot responds in **DMs only**
+until you add channel IDs. This is intentional for a controlled playtest rollout.
+
 ### Environment variables
 
 | Variable | Purpose |
 |----------|---------|
 | `DISCORD_TOKEN` | Bot token (required) |
-| `GUILD_ID` | Primary server ID (recommended) |
+| `GUILD_ID` | Primary server ID (recommended for instant slash sync) |
 | `ADMIN_ROLE_IDS` | Comma-separated admin role IDs |
 | `OLLAMA_HOST` | Ollama API URL |
 | `LOG_JSON=1` | Structured JSON logs (production) |
@@ -258,29 +276,29 @@ Requires `channels.summary_channel_id` for summary and game posts.
 
 ```
 discord-ai-bot/
-├── bot/                 # Discord client, router, commands, guardrails delivery
+├── bot/                 # Discord client, router, commands, observability
 ├── services/            # Domain services (identity, game, governance, …)
 ├── ai/
 │   ├── agent/           # LangGraph react agent, tools, state
-│   ├── rag/             # Chroma ingest + retrieval
-│   ├── persona.py       # System prompt builder
-│   └── guardrails.py    # Input/output sanitization
-├── mcp_servers/         # FastMCP stdio servers (discord_helper, rag_server)
-├── storage/             # SQLite schemas, models, history CRUD
+│   └── rag/             # Chroma ingest, retrieval, privacy helpers
+├── mcp_servers/         # stdio MCP servers (discord_helper, rag_server)
+├── storage/             # SQLite schemas, history, checkpoint cleanup
 ├── scheduler/           # APScheduler job definitions
+├── tests/               # pytest unit tests
+├── scripts/             # healthcheck.py
 ├── prompts/             # tramice721_system.txt, Ollama Modelfile
-├── docs/                # RAG sources (jeu.pdf, requirements, specifications)
-├── data/                # Runtime DBs + Chroma (gitignored, created on first run)
+├── docs/                # requirements, specs, status, planning, RAG sources
+├── data/                # Runtime DBs + Chroma (gitignored)
 ├── config.yaml
-├── .env.example
 ├── requirements.txt
+├── requirements-dev.txt
 ├── run.sh
 ├── Dockerfile
 ├── docker-compose.yml
 └── deploy/tramice721.service
 ```
 
-Approximate size: **~4,500 lines** of Python application code.
+Approximate size: **~5,100 lines** of Python application code.
 
 ---
 
@@ -290,9 +308,11 @@ Approximate size: **~4,500 lines** of Python application code.
   matchmaking, and RAG-over-history.
 - **DMs** and **confidences** are treated as private and excluded from public
   summaries and Cosmo views.
-- Members can run `/forgetme` to soft-delete their messages and profile rows.
-- Post an **AI-logging notice** to your server before going live (GDPR-style).
-- Restrict logging with `channels.allowlist` if you do not want all salons indexed.
+- `/forgetme` soft-deletes messages and profile rows, removes LangGraph
+  checkpoints, and deletes Chroma `history` embeddings for that user.
+- Post an **AI-logging notice** before going live —
+  [`docs/ai_logging_notice.md`](docs/ai_logging_notice.md).
+- Use `channels.allowlist` to limit which salons are logged and where the bot acts.
 
 ---
 
@@ -301,11 +321,13 @@ Approximate size: **~4,500 lines** of Python application code.
 ### systemd (Linux)
 
 ```bash
-# Edit User/WorkingDirectory in deploy/tramice721.service, then:
+# Edit User/WorkingDirectory/EnvironmentFile in deploy/tramice721.service, then:
 sudo cp deploy/tramice721.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now tramice721
 ```
+
+The unit loads secrets from `.env` via `EnvironmentFile`.
 
 ### Docker Compose
 
@@ -314,7 +336,10 @@ sudo systemctl enable --now tramice721
 docker compose up --build
 ```
 
-Ollama runs in a sibling container; mount `./data` and `./docs` for persistence.
+The stack pulls Ollama models on first start (`ollama-init`), mounts `./data` and
+`./docs`, and uses `scripts/healthcheck.py` (heartbeat in `data/.health`).
+
+Set `LOG_JSON=1` in production for structured turn and job logging.
 
 ---
 
@@ -323,17 +348,20 @@ Ollama runs in a sibling container; mount `./data` and `./docs` for persistence.
 | Symptom | Check |
 |---------|-------|
 | Bot exits immediately | `DISCORD_TOKEN` set in `.env`? |
+| Bot ignores salon messages | `channels.allowlist` includes that channel ID? |
 | "Mon moteur de réflexion est indisponible" | `ollama serve` running? Model pulled? |
 | RAG returns nothing | Run `python -m ai.rag.ingest`; verify `nomic-embed-text` |
 | Slash commands missing | Set `GUILD_ID`; restart bot; wait for guild sync |
-| "Je suis un peu débordée" | Queue full or cooldown; wait and retry |
-| Slow replies | CPU-only 7B is multi-second; only one LLM request at a time |
+| Cooldown / busy message | Queue full or rate limit; wait and retry |
+| Slow replies | CPU-only 7B is multi-second; one LLM request at a time |
+| Docker unhealthy | Bot running? Check `data/.health` timestamp |
 
 Smoke checks:
 
 ```bash
 python -m storage.db
 python -m ai.rag.ingest
+pip install -r requirements-dev.txt && pytest tests/ -q
 python -m bot.main          # needs DISCORD_TOKEN
 ```
 
@@ -347,8 +375,11 @@ Admin health: `/health` in Discord.
 |----------|----------|
 | [`docs/requirements.md`](docs/requirements.md) | Service catalog, persona, NFRs |
 | [`docs/specifications.md`](docs/specifications.md) | Schemas, APIs, acceptance criteria |
+| [`docs/implementation_status.md`](docs/implementation_status.md) | Built features and known gaps |
+| [`docs/planning.md`](docs/planning.md) | Phased roadmap (connect → playtest → hardening) |
+| [`docs/ai_logging_notice.md`](docs/ai_logging_notice.md) | Template notice for server members |
 | [`docs/jeu.pdf`](docs/jeu.pdf) | Game design (RAG source) |
-| [`.cursor/plans/discord_ai_bot_4b8e92eb.plan.md`](.cursor/plans/discord_ai_bot_4b8e92eb.plan.md) | Implementation plan (M0–M6) |
+| [`.cursor/plans/discord_ai_bot_4b8e92eb.plan.md`](.cursor/plans/discord_ai_bot_4b8e92eb.plan.md) | Original milestone plan (M0–M6) |
 
 ---
 

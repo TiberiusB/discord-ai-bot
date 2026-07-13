@@ -1,8 +1,4 @@
-"""MemoryService (spec §5.8) — community memory: logging, deletion, history.
-
-The daily-summary implementation is added in M5; the method is present here so
-the service interface is stable.
-"""
+"""MemoryService (spec §5.8) — community memory: logging, deletion, history."""
 
 from __future__ import annotations
 
@@ -20,12 +16,15 @@ class ForgetResult:
     confidences_deleted: int
     echoes_deleted: int
     profile_deleted: bool
+    checkpoints_deleted: int = 0
+    history_embeddings_deleted: int = 0
 
 
 class MemoryService:
-    def __init__(self, db: Database, history: HistoryStore):
+    def __init__(self, db: Database, history: HistoryStore, settings=None):
         self.db = db
         self.history = history
+        self.settings = settings
 
     def log_message(self, msg: DiscordMessageSnapshot) -> int:
         return self.history.log_message(msg)
@@ -48,12 +47,28 @@ class MemoryService:
         profile = self.db.execute_app(
             "DELETE FROM trammers WHERE discord_user_id = ?", (user_id,)
         ).rowcount
+
+        checkpoints_deleted = 0
+        history_embeddings_deleted = 0
+        if self.settings is not None:
+            from ai.rag.privacy import delete_user_history_embeddings
+            from storage.checkpoints import forget_user_threads
+
+            checkpoints_deleted = forget_user_threads(
+                self.settings.checkpoints_db_path, user_id
+            )
+            history_embeddings_deleted = delete_user_history_embeddings(
+                self.settings, user_id
+            )
+
         return ForgetResult(
             messages_deleted=messages,
             volios_deleted=volios,
             confidences_deleted=confidences,
             echoes_deleted=echoes,
             profile_deleted=bool(profile),
+            checkpoints_deleted=checkpoints_deleted,
+            history_embeddings_deleted=history_embeddings_deleted,
         )
 
     def build_daily_summary(self, guild_id: str) -> Summary:

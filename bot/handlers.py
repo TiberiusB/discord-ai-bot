@@ -25,11 +25,12 @@ def channel_allowed(settings: Settings, channel_id: str, is_dm: bool) -> bool:
         return cid not in denylist
     if mode == "denylist":
         return cid not in denylist
-    # allowlist mode: empty allowlist means "act everywhere not denied" so the
-    # bot is usable before an operator curates the list.
+    # allowlist mode: empty allowlist means salons are disabled until configured.
+    # DMs remain available (handled above). Operators must set channel IDs
+    # explicitly before the bot acts in shared channels.
     if not allowlist:
-        return cid not in denylist
-    return cid in allowlist
+        return False
+    return cid in allowlist and cid not in denylist
 
 
 def should_log(settings: Settings, channel_id: str, is_dm: bool) -> bool:

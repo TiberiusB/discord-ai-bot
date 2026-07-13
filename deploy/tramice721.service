@@ -2,7 +2,7 @@
 # Install:
 #   sudo cp deploy/tramice721.service /etc/systemd/system/
 #   sudo systemctl daemon-reload && sudo systemctl enable --now tramice721
-# Edit User/WorkingDirectory to match your host.
+# Edit User/WorkingDirectory/EnvironmentFile to match your host.
 
 [Unit]
 Description=Tramice721 Discord bot
@@ -13,6 +13,7 @@ Wants=network-online.target
 Type=simple
 User=sensorica
 WorkingDirectory=/home/sensorica/Development/DiscordBot/discord-ai-bot
+EnvironmentFile=-/home/sensorica/Development/DiscordBot/discord-ai-bot/.env
 ExecStart=/home/sensorica/Development/DiscordBot/discord-ai-bot/venv/bin/python -m bot.main
 Environment=LOG_JSON=1
 Restart=on-failure

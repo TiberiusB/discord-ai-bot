@@ -15,7 +15,8 @@ from discord.ext import commands
 
 from bot.config import Settings
 from bot.handlers import channel_allowed, detect_trigger, make_request, should_log
-from bot.router import AgentRequest, Router
+from bot.observability import touch_health
+from bot.router import AgentRequest, Router, SubmitStatus
 from storage.db import Database
 from storage.history import HistoryStore
 from storage.models import DiscordMessageSnapshot
@@ -23,6 +24,10 @@ from storage.models import DiscordMessageSnapshot
 log = logging.getLogger("tramice.discord")
 
 DISCORD_LIMIT = 2000
+COMMAND_ERROR_MESSAGE = (
+    "Oups, cette commande a rencontré une petite turbulence. "
+    "Réessaie dans un instant ou contacte un admin si ça persiste."
+)
 
 
 def split_message(text: str, limit: int = DISCORD_LIMIT) -> list[str]:
@@ -139,6 +144,26 @@ class TramiceBot(commands.Bot):
 
     async def on_ready(self) -> None:
         log.info("Logged in as %s (id=%s)", self.user, getattr(self.user, "id", "?"))
+        touch_health()
+
+    async def on_app_command_error(
+        self, interaction: discord.Interaction, error: app_commands.AppCommandError
+    ) -> None:
+        log.exception(
+            "Slash command error command=%s user=%s",
+            getattr(interaction.command, "name", "?"),
+            getattr(interaction.user, "id", "?"),
+            exc_info=error,
+        )
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(COMMAND_ERROR_MESSAGE, ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    COMMAND_ERROR_MESSAGE, ephemeral=True
+                )
+        except discord.DiscordException:
+            log.exception("Failed to send command error response")
 
     async def post_to_channel(self, channel_id: str, text: str) -> None:
         """Send text (chunked) to a channel by id; used by scheduled jobs."""
@@ -206,9 +231,9 @@ class TramiceBot(commands.Bot):
         )
         req.reply = message.channel.send
         async with message.channel.typing():
-            accepted = await self.router.submit(req)
-        if not accepted and trigger == "prefix":
-            log.debug("Request dropped by router (cooldown)")
+            result = await self.router.submit(req)
+        if result.status is not SubmitStatus.ACCEPTED and result.message:
+            await message.channel.send(result.message)
 
 
 def _never_prefix(bot, message):  # noqa: ANN001 - discord.py signature

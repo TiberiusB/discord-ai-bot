@@ -13,6 +13,7 @@ from discord import app_commands
 
 from bot.handlers import make_request
 from bot.observability import audit
+from bot.router import SubmitStatus
 
 log = logging.getLogger("tramice.commands")
 
@@ -36,11 +37,9 @@ async def _run_agent_interaction(
         command=command,
     )
     req.reply = interaction.followup.send
-    accepted = await bot.router.submit(req)
-    if not accepted:
-        await interaction.followup.send(
-            "Je suis un peu débordée — réessaie dans un instant."
-        )
+    result = await bot.router.submit(req)
+    if result.status is not SubmitStatus.ACCEPTED and result.message:
+        await interaction.followup.send(result.message)
 
 
 def register_commands(bot) -> None:
@@ -69,6 +68,8 @@ def register_commands(bot) -> None:
             f"- volios supprimés : {result.volios_deleted}\n"
             f"- confidences supprimées : {result.confidences_deleted}\n"
             f"- échos supprimés : {result.echoes_deleted}\n"
+            f"- fils de conversation supprimés : {result.checkpoints_deleted}\n"
+            f"- fragments RAG supprimés : {result.history_embeddings_deleted}\n"
             f"- profil supprimé : {'oui' if result.profile_deleted else 'non'}"
         )
 

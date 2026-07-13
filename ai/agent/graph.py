@@ -12,9 +12,10 @@ import asyncio
 import hashlib
 import json
 import logging
+import time
 
 import aiosqlite
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.prebuilt import create_react_agent
 
@@ -24,10 +25,22 @@ from ai.persona import build_system_prompt
 from ai.responder import OLLAMA_DOWN, load_social_norms
 from bot.router import AgentRequest
 
+from bot.observability import log_turn
+
 log = logging.getLogger("tramice.agent")
 
 # ~5 tool calls per turn (spec §3.2): each call is ~2 graph steps, plus slack.
 RECURSION_LIMIT = 12
+
+
+def _count_tool_calls(messages: list) -> int:
+    """Count tool invocations in the agent message trace."""
+    return sum(
+        1
+        for msg in messages
+        if isinstance(msg, ToolMessage)
+        or (isinstance(msg, AIMessage) and getattr(msg, "tool_calls", None))
+    )
 
 
 class AgentResponder:
@@ -112,7 +125,18 @@ class AgentResponder:
 
     # ---- responder API -------------------------------------------------
     async def respond(self, req: AgentRequest) -> str:
+        started = time.monotonic()
+        model = self.ollama.model
         if not await self.ollama.ping():
+            log_turn(
+                user_id=req.user_id,
+                channel_id=req.channel_id,
+                guild_id=req.guild_id,
+                trigger=req.trigger,
+                duration_ms=(time.monotonic() - started) * 1000,
+                model=model,
+                status="ollama_down",
+            )
             return OLLAMA_DOWN
         norms = load_social_norms(self.db)
         agent = await self._get_agent(req.surface, norms)
@@ -132,10 +156,30 @@ class AgentResponder:
             result = await agent.ainvoke(state_in, config=config)
         except Exception as exc:  # noqa: BLE001
             log.exception("Agent invocation failed")
+            log_turn(
+                user_id=req.user_id,
+                channel_id=req.channel_id,
+                guild_id=req.guild_id,
+                trigger=req.trigger,
+                duration_ms=(time.monotonic() - started) * 1000,
+                model=model,
+                status="error",
+            )
             if "connect" in str(exc).lower():
                 return OLLAMA_DOWN
             return "Oups, une petite turbulence de mon côté. Peux-tu reformuler ?"
         messages = result.get("messages", [])
+        tool_calls = _count_tool_calls(messages)
+        log_turn(
+            user_id=req.user_id,
+            channel_id=req.channel_id,
+            guild_id=req.guild_id,
+            trigger=req.trigger,
+            duration_ms=(time.monotonic() - started) * 1000,
+            model=model,
+            tool_calls=tool_calls,
+            status="ok",
+        )
         if not messages:
             return "Hmm, je n'ai rien à répondre pour l'instant."
         return getattr(messages[-1], "content", "") or "…"

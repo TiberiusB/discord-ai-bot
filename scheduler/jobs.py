@@ -7,14 +7,39 @@ All jobs run in the bot's asyncio loop, in the configured timezone
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from ai.rag.ingest import ingest_docs, ingest_history_rows
+from bot.observability import log_job
 
 log = logging.getLogger("tramice.scheduler")
+
+
+def _wrap_job(job_id: str, fn):
+    """Wrap a job coroutine with duration + status logging."""
+
+    async def _runner() -> None:
+        started = time.monotonic()
+        status = "ok"
+        fields: dict = {}
+        try:
+            await fn(fields)
+        except Exception:  # noqa: BLE001
+            status = "error"
+            log.exception("job:%s failed", job_id)
+        finally:
+            log_job(
+                job_id=job_id,
+                duration_ms=(time.monotonic() - started) * 1000,
+                status=status,
+                **fields,
+            )
+
+    return _runner
 
 
 def build_scheduler(bot) -> AsyncIOScheduler:
@@ -23,37 +48,37 @@ def build_scheduler(bot) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone=settings.timezone)
     tz = settings.timezone
 
-    async def index_new_messages() -> None:
+    async def index_new_messages(fields: dict) -> None:
         log.info("job:index_new_messages start")
         rows = bot.history.fetch_unindexed(limit=500, include_dm=False)
         if not rows:
             log.info("job:index_new_messages nothing to index")
+            fields["rows"] = 0
             return
-        try:
-            result = ingest_history_rows(settings, rows)
-            bot.history.mark_indexed([r["id"] for r in rows])
-            log.info("job:index_new_messages indexed %d chunks", result.chunks)
-        except Exception:  # noqa: BLE001
-            log.exception("job:index_new_messages failed (Ollama down?)")
+        result = ingest_history_rows(settings, rows)
+        bot.history.mark_indexed([r["id"] for r in rows])
+        fields["rows"] = len(rows)
+        fields["chunks"] = result.chunks
+        log.info("job:index_new_messages indexed %d chunks", result.chunks)
 
-    async def refresh_knowledge_base() -> None:
+    async def refresh_knowledge_base(fields: dict) -> None:
         log.info("job:refresh_knowledge_base start")
-        try:
-            result = ingest_docs(settings, reset=True)
-            log.info("job:refresh_knowledge_base %d chunks", result.chunks)
-        except Exception:  # noqa: BLE001
-            log.exception("job:refresh_knowledge_base failed")
+        result = ingest_docs(settings, reset=True)
+        fields["chunks"] = result.chunks
+        log.info("job:refresh_knowledge_base %d chunks", result.chunks)
 
-    async def build_daily_summary() -> None:
+    async def build_daily_summary(fields: dict) -> None:
         log.info("job:build_daily_summary start")
         channel_id = settings.summary_channel_id
         guild_id = settings.guild_id
         if not channel_id or not guild_id:
             log.info("job:build_daily_summary skipped (no summary_channel_id/guild)")
+            fields["skipped"] = True
             return
         now = datetime.now(timezone.utc)
         since = (now - timedelta(hours=24)).isoformat()
         rows = bot.history.fetch_guild_between(guild_id, since, now.isoformat())
+        fields["messages"] = len(rows)
         if not rows:
             await bot.post_to_channel(
                 channel_id, "Bonjour ! Rien de neuf dans les salons ces 24 heures. 🌿"
@@ -67,13 +92,15 @@ def build_scheduler(bot) -> AsyncIOScheduler:
         )
         log.info("job:build_daily_summary posted (%d messages)", len(rows))
 
-    async def game_week_open() -> None:
+    async def game_week_open(fields: dict) -> None:
         log.info("job:game_week_open start")
         if services is None or services.game is None:
+            fields["skipped"] = True
             return
         week = services.game.get_current_week()
         services.game.set_week_status(week.week_id, "investing")
         budget = services.game.compute_influence_budget(week.week_id)
+        fields["week_id"] = week.week_id
         msg = (
             f"🌅 **Ouverture de la semaine {week.week_id}**\n"
             f"La fenêtre d'investissement est ouverte jusqu'à dimanche minuit.\n"
@@ -85,12 +112,15 @@ def build_scheduler(bot) -> AsyncIOScheduler:
         if settings.summary_channel_id:
             await bot.post_to_channel(settings.summary_channel_id, msg)
 
-    async def game_week_close() -> None:
+    async def game_week_close(fields: dict) -> None:
         log.info("job:game_week_close start")
         if services is None or services.game is None:
+            fields["skipped"] = True
             return
         week = services.game.get_current_week()
         n = services.game.finalize_allocations(week.week_id)
+        fields["week_id"] = week.week_id
+        fields["allocations"] = n
         msg = (
             f"🌙 **Clôture de la semaine {week.week_id}**\n"
             f"Fenêtre d'investissement fermée. {n} entité·s ont reçu des allocations. "
@@ -99,16 +129,31 @@ def build_scheduler(bot) -> AsyncIOScheduler:
         if settings.summary_channel_id:
             await bot.post_to_channel(settings.summary_channel_id, msg)
 
-    scheduler.add_job(index_new_messages, CronTrigger(hour=2, minute=0, timezone=tz),
-                      id="index_new_messages")
-    scheduler.add_job(refresh_knowledge_base, CronTrigger(day_of_week="sun", hour=3, minute=0, timezone=tz),
-                      id="refresh_knowledge_base")
-    scheduler.add_job(build_daily_summary, CronTrigger(hour=8, minute=0, timezone=tz),
-                      id="build_daily_summary")
-    scheduler.add_job(game_week_open, CronTrigger(day_of_week="thu", hour=17, minute=0, timezone=tz),
-                      id="game_week_open")
-    scheduler.add_job(game_week_close, CronTrigger(day_of_week="sun", hour=23, minute=59, timezone=tz),
-                      id="game_week_close")
+    scheduler.add_job(
+        _wrap_job("index_new_messages", index_new_messages),
+        CronTrigger(hour=2, minute=0, timezone=tz),
+        id="index_new_messages",
+    )
+    scheduler.add_job(
+        _wrap_job("refresh_knowledge_base", refresh_knowledge_base),
+        CronTrigger(day_of_week="sun", hour=3, minute=0, timezone=tz),
+        id="refresh_knowledge_base",
+    )
+    scheduler.add_job(
+        _wrap_job("build_daily_summary", build_daily_summary),
+        CronTrigger(hour=8, minute=0, timezone=tz),
+        id="build_daily_summary",
+    )
+    scheduler.add_job(
+        _wrap_job("game_week_open", game_week_open),
+        CronTrigger(day_of_week="thu", hour=17, minute=0, timezone=tz),
+        id="game_week_open",
+    )
+    scheduler.add_job(
+        _wrap_job("game_week_close", game_week_close),
+        CronTrigger(day_of_week="sun", hour=23, minute=59, timezone=tz),
+        id="game_week_close",
+    )
     return scheduler
 
 
