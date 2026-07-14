@@ -31,6 +31,19 @@ def load_social_norms(db: Database) -> dict:
     return norms
 
 
+def resolve_model(db: Database, ollama: OllamaClient, user_id: str | None) -> str:
+    """Pick the chat model for a turn: the user's choice or the global default."""
+    if user_id:
+        try:
+            pref = db.get_user_model(user_id)
+        except Exception:  # noqa: BLE001 - preference lookup must not break a turn
+            log.warning("User model lookup failed for %s", user_id, exc_info=True)
+            pref = None
+        if pref:
+            return pref
+    return ollama.model
+
+
 class DirectResponder:
     """Stateless single-turn responder (M1 baseline)."""
 
@@ -46,8 +59,9 @@ class DirectResponder:
             {"role": "system", "content": system},
             {"role": "user", "content": req.content},
         ]
+        model = resolve_model(self._db, self._ollama, req.user_id)
         try:
-            return await self._ollama.chat(messages)
+            return await self._ollama.chat(messages, model=model)
         except Exception as exc:  # noqa: BLE001
             log.exception("Ollama chat failed")
             return OLLAMA_DOWN if "connect" in str(exc).lower() else (

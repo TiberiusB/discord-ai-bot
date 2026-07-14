@@ -11,6 +11,8 @@ import asyncio
 import logging
 import sys
 
+import discord
+
 from ai.ollama_client import OllamaClient
 from bot.config import load_settings
 from storage.db import build_database
@@ -35,15 +37,31 @@ def configure_logging() -> None:
     root = logging.getLogger()
     root.setLevel(logging.INFO)
     root.handlers = [handler]
-    logging.getLogger("discord").setLevel(logging.WARNING)
+    discord_level_name = os.getenv("DISCORD_LOG_LEVEL", "WARNING").upper()
+    discord_level = getattr(logging, discord_level_name, logging.WARNING)
+    logging.getLogger("discord").setLevel(discord_level)
+    if discord_level <= logging.INFO:
+        logging.getLogger("discord.gateway").setLevel(discord_level)
 
 
 async def run() -> None:
     settings = load_settings()
     if not settings.discord_token:
-        log.error(
-            "DISCORD_TOKEN is not set. Copy .env.example to .env and fill it in."
-        )
+        from bot.config import PROJECT_ROOT
+
+        env_path = PROJECT_ROOT / ".env"
+        if env_path.exists():
+            log.error(
+                "DISCORD_TOKEN is empty in %s. Open the Developer Portal → "
+                "Tramice721 → Bot → Reset Token, then paste the token on the "
+                "DISCORD_TOKEN= line (not the application public key).",
+                env_path,
+            )
+        else:
+            log.error(
+                "DISCORD_TOKEN is not set. Copy .env.example to .env and add your "
+                "bot token from the Developer Portal (Bot → Token)."
+            )
         return
 
     from bot.startup import log_launch_warnings
@@ -83,6 +101,24 @@ async def run() -> None:
 
     try:
         await bot.start(settings.discord_token)
+    except discord.LoginFailure:
+        log.error(
+            "Discord login failed: DISCORD_TOKEN is invalid or revoked. "
+            "Reset the token in the Developer Portal and update .env."
+        )
+        raise SystemExit(1) from None
+    except discord.PrivilegedIntentsRequired as exc:
+        log.error(
+            "Discord login failed: %s — enable Message Content Intent and "
+            "Server Members Intent in the Developer Portal (Bot settings).",
+            exc,
+        )
+        raise SystemExit(1) from None
+    except discord.DiscordException as exc:
+        from bot.discord_errors import describe_discord_error
+
+        log.error("Discord connection failed: %s", describe_discord_error(exc), exc_info=exc)
+        raise SystemExit(1) from None
     finally:
         await bot.close()
         if hasattr(responder, "aclose"):

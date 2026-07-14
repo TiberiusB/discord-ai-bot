@@ -168,3 +168,66 @@ class IdentityService:
         score = min(1.0, (n * 0.05) + (float(total) / 1000.0))
         self.upsert_trammer(trammer_id, trust_score=score)
         return score
+
+    # ---- member aliases (post-MVP) ------------------------------------
+    def record_alias(self, user_id: str, name: str) -> None:
+        """Track a display/nick name change for a Discord user."""
+        if not name or not name.strip():
+            return
+        name = name.strip()
+        now = utcnow()
+        self.upsert_trammer(user_id, display_name=name)
+        existing = self.db.query_app_one(
+            "SELECT id FROM member_aliases WHERE user_id = ? AND name = ?",
+            (user_id, name),
+        )
+        if existing:
+            self.db.execute_app(
+                "UPDATE member_aliases SET last_seen = ?, is_current = 1 WHERE id = ?",
+                (now, existing["id"]),
+            )
+        else:
+            self.db.execute_app(
+                "INSERT INTO member_aliases (user_id, name, first_seen, last_seen, is_current) "
+                "VALUES (?, ?, ?, ?, 1)",
+                (user_id, name, now, now),
+            )
+        self.db.execute_app(
+            "UPDATE member_aliases SET is_current = 0 WHERE user_id = ? AND name != ?",
+            (user_id, name),
+        )
+
+    def _linked_user_ids(self, user_id: str) -> set[str]:
+        ids = {user_id}
+        for row in self.db.query_app(
+            "SELECT user_id_a, user_id_b FROM identity_links "
+            "WHERE user_id_a = ? OR user_id_b = ?",
+            (user_id, user_id),
+        ):
+            ids.add(row["user_id_a"])
+            ids.add(row["user_id_b"])
+        return ids
+
+    def list_aliases(self, user_id: str) -> list[str]:
+        """All known names for a user, including linked identities."""
+        linked = self._linked_user_ids(user_id)
+        placeholders = ",".join("?" for _ in linked)
+        rows = self.db.query_app(
+            f"SELECT DISTINCT name FROM member_aliases WHERE user_id IN ({placeholders}) "
+            "ORDER BY is_current DESC, last_seen DESC",
+            tuple(linked),
+        )
+        return [r["name"] for r in rows]
+
+    def link_identities(self, user_id_a: str, user_id_b: str, linked_by: str) -> None:
+        """Associate two Discord user ids as the same person."""
+        if user_id_a == user_id_b:
+            raise ValueError("Cannot link an identity to itself.")
+        a, b = sorted((user_id_a, user_id_b))
+        self.upsert_trammer(a)
+        self.upsert_trammer(b)
+        self.db.execute_app(
+            "INSERT OR IGNORE INTO identity_links (user_id_a, user_id_b, linked_by, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            (a, b, linked_by, utcnow()),
+        )

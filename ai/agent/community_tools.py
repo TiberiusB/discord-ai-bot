@@ -93,4 +93,22 @@ def make_community_tools(settings, services) -> list:
             ),
         ]
 
+    def get_discord_capabilities() -> str:
+        """Afficher les capacités Discord actuelles du bot et la stratégie de communication."""
+        from bot.capabilities import build_capabilities_note, load_capabilities_snapshot
+
+        snap = load_capabilities_snapshot(settings)
+        return build_capabilities_note(snap)
+
+    tools.append(
+        StructuredTool.from_function(
+            func=get_discord_capabilities,
+            name="get_discord_capabilities",
+            description=(
+                "Consulter les permissions Discord du bot (TTS, fils, événements, "
+                "soundboard) et la stratégie de communication à suivre."
+            ),
+        )
+    )
+
     return tools

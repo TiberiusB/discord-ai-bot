@@ -8,6 +8,7 @@ import logging
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from bot.config import PROJECT_ROOT
 
@@ -20,6 +21,39 @@ _STD_ATTRS = set(
 
 _turn_log = logging.getLogger("tramice.turn")
 _job_log = logging.getLogger("tramice.job")
+
+# In-memory runtime error counters for /health (not persisted).
+_last_event_error: str | None = None
+_last_event_error_at: str | None = None
+_last_job_error_id: str | None = None
+_last_job_error_at: str | None = None
+_event_error_count: int = 0
+_job_error_count: int = 0
+
+
+def record_event_error(event: str, summary: str) -> None:
+    global _last_event_error, _last_event_error_at, _event_error_count
+    _last_event_error = f"{event}: {summary}"
+    _last_event_error_at = datetime.now(timezone.utc).isoformat()
+    _event_error_count += 1
+
+
+def record_job_error(job_id: str) -> None:
+    global _last_job_error_id, _last_job_error_at, _job_error_count
+    _last_job_error_id = job_id
+    _last_job_error_at = datetime.now(timezone.utc).isoformat()
+    _job_error_count += 1
+
+
+def get_runtime_health() -> dict[str, Any]:
+    return {
+        "last_event_error": _last_event_error,
+        "last_event_error_at": _last_event_error_at,
+        "last_job_error_id": _last_job_error_id,
+        "last_job_error_at": _last_job_error_at,
+        "event_error_count": _event_error_count,
+        "job_error_count": _job_error_count,
+    }
 
 
 class JsonFormatter(logging.Formatter):
@@ -86,6 +120,8 @@ def log_job(*, job_id: str, duration_ms: float, status: str = "ok", **fields) ->
         **fields,
     }
     _job_log.info("scheduler_job", extra=extra)
+    if status == "error":
+        record_job_error(job_id)
     touch_health()
 
 

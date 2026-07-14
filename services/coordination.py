@@ -76,6 +76,17 @@ class CoordinationService:
             "UPDATE events SET status = 'cancelled' WHERE id = ?", (event_id,)
         )
 
+    def attach_discord_event_id(self, event_id: str, discord_event_id: str) -> None:
+        event = self.get_event(event_id)
+        if event is None:
+            return
+        meta = dict(event.metadata or {})
+        meta["discord_event_id"] = discord_event_id
+        self.db.execute_app(
+            "UPDATE events SET metadata = ? WHERE id = ?",
+            (json.dumps(meta), event_id),
+        )
+
     def get_event(self, event_id: str) -> Event | None:
         row = self.db.query_app_one("SELECT * FROM events WHERE id = ?", (event_id,))
         return _row_to_event(row) if row else None

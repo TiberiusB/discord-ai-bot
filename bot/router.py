@@ -165,6 +165,10 @@ class Router:
             return SubmitResult(status=SubmitStatus.QUEUE_FULL, message=BUSY_MESSAGE)
         return SubmitResult(status=SubmitStatus.ACCEPTED)
 
+    @property
+    def queue_depth(self) -> int:
+        return self._queue.qsize()
+
     async def _run(self) -> None:
         while True:
             req = await self._queue.get()
@@ -178,10 +182,15 @@ class Router:
                         await self._deliver(req, reply)
                 except Exception:  # noqa: BLE001 - one bad turn must not kill worker
                     log.exception("Responder failed for thread=%s", req.thread_id)
-                    await self._deliver(
-                        req,
-                        "Oups, une petite turbulence de mon côté. Peux-tu reformuler ?",
-                    )
+                    try:
+                        await self._deliver(
+                            req,
+                            "Oups, une petite turbulence de mon côté. Peux-tu reformuler ?",
+                        )
+                    except Exception:  # noqa: BLE001
+                        log.exception(
+                            "Failed to deliver fallback for thread=%s", req.thread_id
+                        )
                 finally:
                     elapsed_ms = (time.monotonic() - started) * 1000
                     log.debug(

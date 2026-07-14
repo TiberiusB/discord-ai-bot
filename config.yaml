@@ -5,24 +5,31 @@ bot:
   timezone: America/Montreal
 
 llm:
-  model: qwen2.5:7b-instruct
+  model: qwen2.5:7b-instruct   # global default; admins swap with /model
+  # Users can pick their own chat model with /modele (e.g. gemma2:9b).
+  # Any model installed in Ollama (`ollama list`) is selectable.
   temperature: 0.7
   max_tokens: 2048
   embed_model: nomic-embed-text
 
 channels:
   log_mode: allowlist          # allowlist | denylist | all
-  # REQUIRED for salon access: add Discord channel IDs before going live.
-  # Empty allowlist = DMs only (no salon triggers or logging).
-  allowlist: []
+  # Salons de Tramice721 + Salle des cartes (guild 1313325400079728734)
+  allowlist:
+    - "1313368950641393707"   # Salons de Tramice721
+    - "1313860231939494001"   # Salle des cartes
   denylist: []
-  summary_channel_id: null
+  summary_channel_id: "1313368950641393707"
 
 features:
   game_simulation: true
   matchmaking: true
   web_fetch: false
   everyone_announcements: false
+  tts: true
+
+governance:
+  escalation_threshold: 3   # open signalements against one member before admin DM
 
 rate_limit:
   per_user_cooldown_sec: 10

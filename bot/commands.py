@@ -14,17 +14,131 @@ from discord import app_commands
 from bot.handlers import make_request
 from bot.observability import audit
 from bot.router import SubmitStatus
+from bot.ui import MODEL_RESET_VALUE, ModelSelectView
 
 log = logging.getLogger("tramice.commands")
 
 PERM_DENIED = "Je n'ai pas la permission pour cette action."
+
+_MODEL_ADMIN_INFO = (
+    "ℹ️ `/model` change le modèle par défaut pour **toute la communauté** "
+    "(sauf les trammers ayant choisi le leur avec `/modele`). Le choix "
+    "n'est pas persisté : il revient à `config.yaml` au redémarrage."
+)
+
+_MODEL_CAUTION = (
+    "ℹ️ **À savoir :** chaque modèle a son caractère. La qualité des réponses, "
+    "la vitesse et l'aptitude à utiliser mes outils varient d'un modèle à "
+    "l'autre — sur CPU, un modèle plus grand (ex. `gemma2:9b`) répond plus "
+    "lentement, et certains modèles suivent moins bien les commandes d'outils. "
+    "Ton choix **ne concerne que tes échanges**, reste en mémoire et s'applique "
+    "dès ton prochain message ; notre fil de conversation est conservé. Reviens "
+    "au modèle par défaut à tout moment avec `/modele nom:defaut`."
+)
+
+_RESET_ALIASES = {"defaut", "défaut", "default", "auto", "reset", "0"}
+
+
+def _is_embed_model(name: str, embed_model: str) -> bool:
+    base = name.split(":", 1)[0]
+    embed_base = embed_model.split(":", 1)[0]
+    return base == embed_base
+
+
+def _filter_chat_models(models: list[str], embed_model: str) -> list[str]:
+    return [m for m in models if not _is_embed_model(m, embed_model)]
+
+
+async def _tools_warning(ollama, choice: str) -> str:
+    if await ollama.supports_tools(choice):
+        return ""
+    return (
+        f"\n\n⚠️ **{choice}** ne gère pas l'appel d'outils : je répondrai "
+        "avec ma personnalité et ma mémoire, mais sans mes outils (recherche "
+        "dans les connaissances, volios, événements…). Pour ces fonctions, "
+        "choisis un modèle compatible (ex. `qwen2.5:7b-instruct`) ou reviens "
+        "au défaut avec `/modele nom:defaut`."
+    )
+
+
+async def _apply_admin_model(
+    bot, interaction: discord.Interaction, name: str, available: list[str]
+) -> None:
+    if available and name not in available:
+        listing = "\n".join(f"- {m}" for m in available) or "(aucun modèle trouvé)"
+        await interaction.followup.send(
+            f"Le modèle `{name}` n'est pas installé. Fais `ollama pull {name}` "
+            f"d'abord.\nModèles disponibles :\n{listing}",
+            ephemeral=True,
+        )
+        return
+    bot.ollama.set_model(name)
+    audit(str(interaction.user.id), "model_swap", args={"model": name})
+    if getattr(bot, "on_model_changed", None):
+        bot.on_model_changed(name)
+    await interaction.followup.send(
+        f"Nouvelle âme par défaut chargée : **{name}**. 🌱\n"
+        "S'applique à tous, sauf aux trammers ayant un modèle personnel "
+        "(`/modele`). Non persisté : retour à `config.yaml` au redémarrage.",
+        ephemeral=True,
+    )
+
+
+async def _apply_user_model(
+    bot,
+    interaction: discord.Interaction,
+    user_id: str,
+    choice: str,
+    available: list[str],
+    *,
+    default_model: str,
+) -> None:
+    if choice.lower() in _RESET_ALIASES:
+        bot.db.clear_user_model(user_id)
+        audit(user_id, "user_model_reset")
+        await interaction.followup.send(
+            f"C'est noté — tu utilises de nouveau le modèle par défaut : "
+            f"**{default_model}**. 🌱\nEffet dès ton prochain message ; notre fil "
+            "de conversation reste intact.",
+            ephemeral=True,
+        )
+        return
+    if available and choice not in available:
+        listing = "\n".join(f"- {m}" for m in available) or "(aucun modèle trouvé)"
+        await interaction.followup.send(
+            f"Le modèle `{choice}` n'est pas installé, je ne peux pas l'utiliser.\n"
+            f"Modèles disponibles :\n{listing}\n\n"
+            "Un admin peut en installer d'autres avec `ollama pull <modèle>`.",
+            ephemeral=True,
+        )
+        return
+    bot.db.set_user_model(user_id, choice)
+    audit(user_id, "user_model_set", args={"model": choice})
+    tools_note = await _tools_warning(bot.ollama, choice)
+    await interaction.followup.send(
+        f"C'est fait — tes échanges utiliseront désormais **{choice}**. 🌱"
+        f"{tools_note}\n\n{_MODEL_CAUTION}",
+        ephemeral=True,
+    )
 
 
 async def _run_agent_interaction(
     bot, interaction: discord.Interaction, content: str, command: str
 ) -> None:
     """Defer an interaction, route it through the queue, reply via followup."""
-    await interaction.response.defer(thinking=True)
+    from bot.discord_errors import log_discord_error
+
+    try:
+        await interaction.response.defer(thinking=True)
+    except discord.DiscordException as exc:
+        log_discord_error(
+            log,
+            "Failed to defer slash interaction",
+            exc,
+            event=f"slash:{command}.defer",
+            user_id=interaction.user.id,
+        )
+        return
     is_dm = interaction.guild is None
     req = make_request(
         guild_id=str(interaction.guild_id) if interaction.guild_id else None,
@@ -39,7 +153,16 @@ async def _run_agent_interaction(
     req.reply = interaction.followup.send
     result = await bot.router.submit(req)
     if result.status is not SubmitStatus.ACCEPTED and result.message:
-        await interaction.followup.send(result.message)
+        try:
+            await interaction.followup.send(result.message)
+        except discord.DiscordException as exc:
+            log_discord_error(
+                log,
+                "Failed to send router rejection",
+                exc,
+                event=f"slash:{command}.reject",
+                user_id=interaction.user.id,
+            )
 
 
 def register_commands(bot) -> None:
@@ -70,8 +193,56 @@ def register_commands(bot) -> None:
             f"- échos supprimés : {result.echoes_deleted}\n"
             f"- fils de conversation supprimés : {result.checkpoints_deleted}\n"
             f"- fragments RAG supprimés : {result.history_embeddings_deleted}\n"
-            f"- profil supprimé : {'oui' if result.profile_deleted else 'non'}"
+            f"- profil supprimé : {'oui' if result.profile_deleted else 'non'}\n"
+            f"- trace d'activité conservée : {'oui' if result.trace_recorded else 'non'}"
         )
+
+    @tree.command(
+        name="say",
+        description="[Admin] Publier un message en synthèse vocale (TTS).",
+    )
+    @app_commands.describe(text="Texte à lire (max 500 caractères)")
+    async def say(interaction: discord.Interaction, text: str):
+        if not bot.is_admin(interaction):
+            await interaction.response.send_message(PERM_DENIED, ephemeral=True)
+            return
+        if not bot.settings.get("features.tts", False):
+            await interaction.response.send_message(
+                "La synthèse vocale est désactivée (`features.tts`).", ephemeral=True
+            )
+            return
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "Le TTS fonctionne dans un salon du serveur.", ephemeral=True
+            )
+            return
+        from ai.guardrails import sanitize_input
+        from bot.capabilities import can, load_capabilities_snapshot
+        from bot.handlers import channel_allowed
+
+        channel_id = str(interaction.channel_id)
+        if not channel_allowed(bot.settings, channel_id, is_dm=False):
+            await interaction.response.send_message(
+                "Ce salon n'est pas autorisé.", ephemeral=True
+            )
+            return
+        snap = load_capabilities_snapshot(bot.settings)
+        if not can(snap, "send_tts_messages", channel_id):
+            await interaction.response.send_message(
+                "Je n'ai pas la permission SEND_TTS_MESSAGES ici.", ephemeral=True
+            )
+            return
+        cleaned = sanitize_input(text)[:500].strip()
+        if not cleaned:
+            await interaction.response.send_message("Texte vide.", ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True)
+        try:
+            await interaction.channel.send(cleaned, tts=True)  # type: ignore[union-attr]
+            audit(str(interaction.user.id), "say_tts", result="ok")
+            await interaction.followup.send("Message TTS envoyé. 🔊", ephemeral=True)
+        except discord.DiscordException as exc:
+            await interaction.followup.send(f"Échec TTS : {exc}", ephemeral=True)
 
     @tree.command(
         name="reindex", description="[Admin] Reconstruire l'index documentaire (RAG)."
@@ -122,43 +293,150 @@ def register_commands(bot) -> None:
             f"- Index Chroma : {'ok' if chroma_ok else 'absent'}",
             "- Tâches planifiées :",
             *(jobs or ["  (aucune)"]),
+            "",
+            "**Discord / runtime :**",
+            *bot.health_snapshot_lines(),
         ]
         await interaction.followup.send("\n".join(lines))
 
-    @tree.command(name="model", description="[Admin] Changer le modèle Ollama.")
-    @app_commands.describe(name="Nom du modèle Ollama (laisser vide pour lister)")
+    @tree.command(
+        name="model",
+        description="[Admin] Changer le modèle Ollama par défaut (toute la communauté).",
+    )
+    @app_commands.describe(name="Nom du modèle Ollama (laisser vide pour le menu)")
     async def model(interaction: discord.Interaction, name: str | None = None):
         if not bot.is_admin(interaction):
             await interaction.response.send_message(PERM_DENIED, ephemeral=True)
             return
         await interaction.response.defer(thinking=True, ephemeral=True)
-        available = await bot.ollama.list_models()
+        embed_model = bot.settings.embed_model
+        available = _filter_chat_models(await bot.ollama.list_models(), embed_model)
         if not name:
             current = bot.ollama.model
             listing = "\n".join(f"- {m}" for m in available) or "(aucun modèle trouvé)"
-            await interaction.followup.send(
-                f"Modèle actuel : **{current}**\nModèles disponibles :\n{listing}"
+            body = (
+                f"Modèle par défaut actuel : **{current}**\n\n"
+                f"Modèles disponibles :\n{listing}\n\n"
+                f"{_MODEL_ADMIN_INFO}\n\n"
+                "**Choisis un modèle dans le menu ci-dessous :**"
             )
-            return
-        if available and name not in available:
-            await interaction.followup.send(
-                f"Le modèle `{name}` n'est pas installé. Fais `ollama pull {name}` "
-                "d'abord, ou choisis parmi la liste (`/model`)."
+
+            async def _on_admin_pick(
+                inter: discord.Interaction, choice: str
+            ) -> None:
+                await _apply_admin_model(bot, inter, choice, available)
+
+            view = ModelSelectView(
+                author_id=interaction.user.id,
+                models=available,
+                body=body,
+                current=current,
+                on_pick=_on_admin_pick,
+                placeholder="Modèle par défaut pour la communauté…",
             )
+            await interaction.followup.send(body, view=view, ephemeral=True)
             return
-        bot.ollama.set_model(name)
-        audit(str(interaction.user.id), "model_swap", args={"model": name})
-        if getattr(bot, "on_model_changed", None):
-            bot.on_model_changed(name)
-        await interaction.followup.send(f"Nouvelle âme chargée : **{name}**. 🌱")
+        await _apply_admin_model(bot, interaction, name.strip(), available)
+
+    @tree.command(
+        name="modele",
+        description="Choisir ton modèle d'IA personnel (n'affecte que tes échanges).",
+    )
+    @app_commands.describe(
+        nom="Nom du modèle (vide pour le menu ; « defaut » pour réinitialiser)"
+    )
+    async def modele(interaction: discord.Interaction, nom: str | None = None):
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        user_id = str(interaction.user.id)
+        embed_model = bot.settings.embed_model
+        available = _filter_chat_models(await bot.ollama.list_models(), embed_model)
+        default_model = bot.ollama.model
+        current_pref = bot.db.get_user_model(user_id)
+
+        if not nom:
+            listing = "\n".join(f"- {m}" for m in available) or "(aucun modèle trouvé)"
+            if current_pref:
+                head = (
+                    f"Ton modèle personnel : **{current_pref}**\n"
+                    f"(Modèle par défaut de la communauté : `{default_model}`.)"
+                )
+            else:
+                head = f"Tu utilises le modèle par défaut : **{default_model}**"
+            body = (
+                f"{head}\n\nModèles disponibles :\n{listing}\n\n"
+                "**Choisis un modèle dans le menu ci-dessous** "
+                "(ou tape `/modele nom:<modèle>` / `/modele nom:defaut`).\n\n"
+                f"{_MODEL_CAUTION}"
+            )
+            current = current_pref or default_model
+
+            async def _on_user_pick(
+                inter: discord.Interaction, choice: str
+            ) -> None:
+                if choice == MODEL_RESET_VALUE:
+                    choice = "defaut"
+                await _apply_user_model(
+                    bot,
+                    inter,
+                    user_id,
+                    choice,
+                    available,
+                    default_model=default_model,
+                )
+
+            view = ModelSelectView(
+                author_id=interaction.user.id,
+                models=available,
+                body=body,
+                current=current,
+                include_reset=True,
+                default_label=default_model,
+                on_pick=_on_user_pick,
+                placeholder="Ton modèle personnel…",
+            )
+            await interaction.followup.send(body, view=view, ephemeral=True)
+            return
+
+        await _apply_user_model(
+            bot,
+            interaction,
+            user_id,
+            nom.strip(),
+            available,
+            default_model=default_model,
+        )
+
+    @modele.autocomplete("nom")
+    async def modele_autocomplete(
+        interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        try:
+            embed_model = bot.settings.embed_model
+            available = _filter_chat_models(
+                await bot.ollama.list_models(), embed_model
+            )
+        except Exception:  # noqa: BLE001 - autocomplete must never raise
+            available = []
+        needle = (current or "").lower()
+        choices: list[app_commands.Choice[str]] = []
+        if not needle or needle in "defaut":
+            choices.append(
+                app_commands.Choice(name="defaut (modèle par défaut)", value="defaut")
+            )
+        for name in available:
+            if needle in name.lower():
+                choices.append(app_commands.Choice(name=name, value=name))
+        return choices[:25]
 
     register_m4_commands(bot)
+    register_post_mvp_commands(bot)
     if bot.settings.get("features.game_simulation", True):
         register_m5_commands(bot)
     log.info(
-        "Registered slash commands: /ask, /forgetme, /reindex, /model, /health, "
-        "/volio, /mondo, /echoes, /event, /summarize, /normes, /norm-set, "
-        "/signalement, /mission, /place, /vote"
+        "Registered slash commands: /ask, /forgetme, /reindex, /model, /modele, "
+        "/health, /say, /volio, /mondo, /echoes, /event, /summarize, /normes, "
+        "/norm-set, /signalement, /identite, /thread, /sondage, /son, "
+        "/mission, /place, /vote"
     )
 
 
@@ -305,9 +583,22 @@ def register_m4_commands(bot) -> None:  # noqa: C901 - cohesive command block
             async def _confirm(inter: discord.Interaction):
                 created = coordination.propose_event(str(interaction.user.id), spec)
                 coordination.confirm_event(created.id)
+                from bot.discord_actions import create_scheduled_event
+
+                discord_eid = await create_scheduled_event(
+                    bot,
+                    title=created.title,
+                    starts_at=when,
+                    location=location,
+                    description=created.title,
+                )
+                if discord_eid:
+                    coordination.attach_discord_event_id(created.id, discord_eid)
                 audit(str(interaction.user.id), "event_confirm", args={"event": created.id})
+                extra = " (événement Discord créé)" if discord_eid else ""
                 await inter.followup.send(
-                    f"Événement confirmé : **{created.title}**. 🎉", ephemeral=False
+                    f"Événement confirmé : **{created.title}**.{extra} 🎉",
+                    ephemeral=False,
                 )
 
             view = ConfirmView(interaction.user.id, _confirm)
@@ -411,9 +702,198 @@ def register_m4_commands(bot) -> None:  # noqa: C901 - cohesive command block
                 description=description,
             ),
         )
+        suggestion = governance.evaluate_moderation(str(target.id) if target else None)
+        if suggestion and interaction.guild_id:
+            sent = await bot.dm_admins(str(interaction.guild_id), suggestion.message)
+            audit(
+                str(interaction.user.id),
+                "moderation_suggestion",
+                args={"target": suggestion.target_id, "dms_sent": sent},
+            )
         await interaction.response.send_message(
             f"Signalement enregistré (n°{sig_id}, niveau {max(1, min(3, level))}). "
             "Je privilégie d'abord la médiation. 🕊️",
+            ephemeral=True,
+        )
+
+
+def register_post_mvp_commands(bot) -> None:
+    """Post-MVP: identity, threads, polls, soundboard."""
+    tree = bot.tree
+    services = bot.services
+
+    def _svc(name):
+        return getattr(services, name, None) if services else None
+
+    @tree.command(
+        name="identite",
+        description="Gérer les noms connus d'un membre ou lier des identités.",
+    )
+    @app_commands.describe(
+        action="noms (lister) ou lier (associer deux comptes)",
+        membre="Membre concerné (défaut : toi)",
+        autre="Second membre (pour lier)",
+    )
+    async def identite(
+        interaction: discord.Interaction,
+        action: str = "noms",
+        membre: discord.Member | None = None,
+        autre: discord.Member | None = None,
+    ):
+        identity = _svc("identity")
+        if identity is None:
+            await interaction.response.send_message("Service indisponible.", ephemeral=True)
+            return
+        subject = membre or interaction.user
+        uid = str(subject.id)
+        if action == "lier":
+            if autre is None:
+                await interaction.response.send_message(
+                    "Précise `autre` pour lier deux identités.", ephemeral=True
+                )
+                return
+            if uid == str(autre.id) and not bot.is_admin(interaction):
+                await interaction.response.send_message(
+                    "Tu ne peux pas lier ton compte à lui-même.", ephemeral=True
+                )
+                return
+            if not bot.is_admin(interaction) and (
+                str(interaction.user.id) not in {uid, str(autre.id)}
+            ):
+                await interaction.response.send_message(PERM_DENIED, ephemeral=True)
+                return
+            try:
+                identity.link_identities(uid, str(autre.id), str(interaction.user.id))
+            except ValueError as exc:
+                await interaction.response.send_message(str(exc), ephemeral=True)
+                return
+            audit(
+                str(interaction.user.id),
+                "identity_link",
+                args={"a": uid, "b": str(autre.id)},
+            )
+            await interaction.response.send_message(
+                f"Identités liées : {subject.display_name} ↔ {autre.display_name}.",
+                ephemeral=True,
+            )
+            return
+        names = identity.list_aliases(uid)
+        if not names:
+            identity.record_alias(uid, subject.display_name)
+            names = identity.list_aliases(uid)
+        body = "\n".join(f"- {n}" for n in names) or "(aucun nom enregistré)"
+        await interaction.response.send_message(
+            f"**Noms connus pour {subject.display_name} :**\n{body}",
+            ephemeral=True,
+        )
+
+    @tree.command(name="thread", description="Créer un fil de discussion dans ce salon.")
+    @app_commands.describe(nom="Nom du fil", message="Premier message (facultatif)")
+    async def thread_cmd(
+        interaction: discord.Interaction,
+        nom: str,
+        message: str | None = None,
+    ):
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "Les fils se créent dans un salon du serveur.", ephemeral=True
+            )
+            return
+        from bot.discord_actions import create_channel_thread
+        from bot.handlers import channel_allowed
+
+        channel_id = str(interaction.channel_id)
+        if not channel_allowed(bot.settings, channel_id, is_dm=False):
+            await interaction.response.send_message(
+                "Ce salon n'est pas autorisé.", ephemeral=True
+            )
+            return
+        await interaction.response.defer(ephemeral=True)
+        thread = await create_channel_thread(bot, channel_id, nom, message)
+        if thread is None:
+            await interaction.followup.send(
+                "Impossible de créer le fil (permission ou type de salon).",
+                ephemeral=True,
+            )
+            return
+        audit(str(interaction.user.id), "create_thread", args={"name": nom})
+        await interaction.followup.send(
+            f"Fil créé : {thread.mention}", ephemeral=True
+        )
+
+    @tree.command(name="sondage", description="Créer un sondage dans ce salon.")
+    @app_commands.describe(
+        question="Question du sondage",
+        option1="Option 1",
+        option2="Option 2",
+        option3="Option 3 (facultatif)",
+        option4="Option 4 (facultatif)",
+    )
+    async def sondage(
+        interaction: discord.Interaction,
+        question: str,
+        option1: str,
+        option2: str,
+        option3: str | None = None,
+        option4: str | None = None,
+    ):
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "Les sondages se créent dans un salon.", ephemeral=True
+            )
+            return
+        from bot.handlers import channel_allowed
+
+        if not channel_allowed(bot.settings, str(interaction.channel_id), is_dm=False):
+            await interaction.response.send_message(
+                "Ce salon n'est pas autorisé.", ephemeral=True
+            )
+            return
+        options = [o for o in (option1, option2, option3, option4) if o and o.strip()]
+        if len(options) < 2:
+            await interaction.response.send_message(
+                "Au moins deux options sont requises.", ephemeral=True
+            )
+            return
+        poll = discord.Poll(
+            question=question[:300],
+            answers=[discord.PollAnswer(text=o[:55]) for o in options[:10]],
+            duration=24,
+        )
+        await interaction.response.defer(ephemeral=True)
+        try:
+            await interaction.channel.send(poll=poll)  # type: ignore[union-attr]
+            audit(str(interaction.user.id), "create_poll", result="ok")
+            await interaction.followup.send("Sondage publié.", ephemeral=True)
+        except discord.DiscordException as exc:
+            await interaction.followup.send(f"Échec du sondage : {exc}", ephemeral=True)
+
+    @tree.command(
+        name="son",
+        description="Lister les sons du soundboard du serveur (lecture vocale limitée).",
+    )
+    async def son(interaction: discord.Interaction):
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "Le soundboard est propre au serveur.", ephemeral=True
+            )
+            return
+        from bot.discord_actions import list_soundboard_sounds
+
+        await interaction.response.defer(ephemeral=True)
+        names = await list_soundboard_sounds(bot)
+        if not names:
+            await interaction.followup.send(
+                "Aucun son accessible (permission USE_SOUNDBOARD ou soundboard vide). "
+                "La lecture automatique en salon vocal n'est pas encore supportée.",
+                ephemeral=True,
+            )
+            return
+        body = "\n".join(f"- {n}" for n in names[:25])
+        await interaction.followup.send(
+            f"**Sons du soundboard :**\n{body}\n\n"
+            "(La lecture automatique en vocal nécessite une connexion vocale — "
+            "à venir.)",
             ephemeral=True,
         )
 

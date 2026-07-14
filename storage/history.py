@@ -90,6 +90,28 @@ class HistoryStore:
         )
         return cur.rowcount
 
+    def user_activity_stats(self, user_id: str) -> dict | None:
+        """Aggregate activity for a user before forget (post-MVP trace)."""
+        row = self.db.query_history_one(
+            "SELECT MIN(created_at) AS first_activity, MAX(created_at) AS last_activity, "
+            "COUNT(*) AS message_count "
+            "FROM messages WHERE user_id = ? AND deleted = 0",
+            (user_id,),
+        )
+        if not row or not row["message_count"]:
+            return None
+        name_row = self.db.query_history_one(
+            "SELECT user_name FROM messages WHERE user_id = ? AND deleted = 0 "
+            "ORDER BY created_at DESC LIMIT 1",
+            (user_id,),
+        )
+        return {
+            "first_activity": row["first_activity"],
+            "last_activity": row["last_activity"],
+            "message_count": int(row["message_count"]),
+            "display_name": name_row["user_name"] if name_row else None,
+        }
+
     def fetch_guild_between(
         self, guild_id: str, since_iso: str, until_iso: str
     ) -> list[sqlite3.Row]:

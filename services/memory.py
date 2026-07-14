@@ -18,6 +18,7 @@ class ForgetResult:
     profile_deleted: bool
     checkpoints_deleted: int = 0
     history_embeddings_deleted: int = 0
+    trace_recorded: bool = False
 
 
 class MemoryService:
@@ -34,6 +35,7 @@ class MemoryService:
 
     def forget_user(self, user_id: str) -> ForgetResult:
         """Delete a user's stored data (MEM-2, §10.1: only their own data)."""
+        trace_recorded = self._record_activity_trace(user_id)
         messages = self.history.soft_delete_user(user_id)
         volios = self.db.execute_app(
             "DELETE FROM volios WHERE trammer_id = ?", (user_id,)
@@ -47,6 +49,7 @@ class MemoryService:
         profile = self.db.execute_app(
             "DELETE FROM trammers WHERE discord_user_id = ?", (user_id,)
         ).rowcount
+        self.db.clear_user_model(user_id)
 
         checkpoints_deleted = 0
         history_embeddings_deleted = 0
@@ -69,7 +72,30 @@ class MemoryService:
             profile_deleted=bool(profile),
             checkpoints_deleted=checkpoints_deleted,
             history_embeddings_deleted=history_embeddings_deleted,
+            trace_recorded=trace_recorded,
         )
+
+    def _record_activity_trace(self, user_id: str) -> bool:
+        """Retain minimal activity trace (name, span, count) before deletion."""
+        stats = self.history.user_activity_stats(user_id)
+        if not stats:
+            return False
+        from storage.db import utcnow
+
+        self.db.execute_app(
+            "INSERT OR REPLACE INTO activity_traces "
+            "(user_id, display_name, first_activity, last_activity, "
+            "message_count, forgotten_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                user_id,
+                stats.get("display_name"),
+                stats["first_activity"],
+                stats["last_activity"],
+                stats["message_count"],
+                utcnow(),
+            ),
+        )
+        return True
 
     def build_daily_summary(self, guild_id: str) -> Summary:
         """Placeholder until M5 wires GovernanceService summarization."""

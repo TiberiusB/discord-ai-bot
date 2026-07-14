@@ -14,8 +14,9 @@ from discord import app_commands
 from discord.ext import commands
 
 from bot.config import Settings
+from bot.discord_errors import log_discord_error, safe_channel_send
 from bot.handlers import channel_allowed, detect_trigger, make_request, should_log
-from bot.observability import touch_health
+from bot.observability import get_runtime_health, touch_health
 from bot.router import AgentRequest, Router, SubmitStatus
 from storage.db import Database
 from storage.history import HistoryStore
@@ -103,8 +104,14 @@ class TramiceBot(commands.Bot):
                     channel = await self.fetch_channel(int(req.channel_id))
                 for chunk in chunks:
                     await channel.send(chunk)
-        except discord.DiscordException:
-            log.exception("Failed to deliver reply to channel=%s", req.channel_id)
+        except discord.DiscordException as exc:
+            log_discord_error(
+                log,
+                "Failed to deliver reply",
+                exc,
+                channel_id=req.channel_id,
+                user_id=req.user_id,
+            )
 
     # ---- admin check ---------------------------------------------------
     def is_admin(self, interaction: discord.Interaction) -> bool:
@@ -131,30 +138,136 @@ class TramiceBot(commands.Bot):
             self.scheduler = build_scheduler(self)
             self.scheduler.start()
             log.info("Scheduler started with %d jobs", len(self.scheduler.get_jobs()))
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
             log.exception("Scheduler failed to start")
+            from bot.observability import record_event_error
+
+            record_event_error("setup_hook.scheduler", str(exc))
         if self.settings.guild_id:
             guild = discord.Object(id=int(self.settings.guild_id))
             self.tree.copy_global_to(guild=guild)
-            await self.tree.sync(guild=guild)
-            log.info("Slash commands synced to guild %s", self.settings.guild_id)
+            try:
+                await self.tree.sync(guild=guild)
+                log.info("Slash commands synced to guild %s", self.settings.guild_id)
+            except discord.DiscordException as exc:
+                log_discord_error(
+                    log,
+                    "Slash command guild sync failed",
+                    exc,
+                    event="setup_hook.sync_guild",
+                    guild_id=self.settings.guild_id,
+                )
         else:
-            await self.tree.sync()
-            log.info("Slash commands synced globally (may take up to 1h to appear)")
+            try:
+                await self.tree.sync()
+                log.info("Slash commands synced globally (may take up to 1h to appear)")
+            except discord.DiscordException as exc:
+                log_discord_error(
+                    log,
+                    "Slash command global sync failed",
+                    exc,
+                    event="setup_hook.sync_global",
+                )
 
     async def on_ready(self) -> None:
         log.info("Logged in as %s (id=%s)", self.user, getattr(self.user, "id", "?"))
         touch_health()
+        try:
+            from bot.capabilities import scan_capabilities
+
+            await scan_capabilities(self)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("Initial capability scan failed")
+            from bot.observability import record_event_error
+
+            record_event_error("on_ready.capability_scan", str(exc))
+
+    async def on_error(self, event_method: str, /, *args, **kwargs) -> None:
+        import sys
+
+        exc = sys.exc_info()[1]
+        if exc is None:
+            log.error("Event handler error in %s (no exception info)", event_method)
+            return
+        log_discord_error(
+            log,
+            f"Unhandled event handler error in {event_method}",
+            exc,
+            event=event_method,
+            exc_info=exc,
+        )
+
+    async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
+        if before.display_name == after.display_name:
+            return
+        identity = getattr(self.services, "identity", None) if self.services else None
+        if identity is None:
+            return
+        try:
+            identity.record_alias(str(after.id), after.display_name)
+        except Exception:  # noqa: BLE001
+            log.exception("Failed to record member alias for %s", after.id)
+
+    async def on_user_update(self, before: discord.User, after: discord.User) -> None:
+        if before.display_name == after.display_name:
+            return
+        identity = getattr(self.services, "identity", None) if self.services else None
+        if identity is None:
+            return
+        try:
+            identity.record_alias(str(after.id), after.display_name)
+        except Exception:  # noqa: BLE001
+            log.exception("Failed to record user alias for %s", after.id)
+
+    async def dm_admins(self, guild_id: str, text: str) -> int:
+        """DM guild owner and admin-role members. Returns count of DMs sent."""
+        try:
+            guild = self.get_guild(int(guild_id)) or await self.fetch_guild(int(guild_id))
+        except (discord.DiscordException, ValueError) as exc:
+            log_discord_error(log, "dm_admins: guild unreachable", exc, guild_id=guild_id)
+            return 0
+
+        recipients: set[int] = set()
+        if guild.owner_id is not None:
+            recipients.add(guild.owner_id)
+        admin_roles = {int(r) for r in self.settings.admin_role_ids if r.isdigit()}
+        if admin_roles:
+            for member in guild.members:
+                if any(r.id in admin_roles for r in member.roles):
+                    recipients.add(member.id)
+
+        sent = 0
+        for uid in recipients:
+            if uid == self.user.id:  # type: ignore[union-attr]
+                continue
+            try:
+                user = guild.get_member(uid) or await self.fetch_user(uid)
+                await user.send(text[:2000])
+                sent += 1
+            except discord.DiscordException as exc:
+                log_discord_error(
+                    log, "Could not DM admin user", exc, user_id=uid, guild_id=guild_id
+                )
+        return sent
 
     async def on_app_command_error(
         self, interaction: discord.Interaction, error: app_commands.AppCommandError
     ) -> None:
-        log.exception(
-            "Slash command error command=%s user=%s",
-            getattr(interaction.command, "name", "?"),
-            getattr(interaction.user, "id", "?"),
+        from bot.discord_errors import describe_discord_error
+
+        cmd = getattr(interaction.command, "name", "?")
+        uid = getattr(interaction.user, "id", "?")
+        summary = describe_discord_error(error)
+        log.error(
+            "Slash command error command=%s user=%s — %s",
+            cmd,
+            uid,
+            summary,
             exc_info=error,
         )
+        from bot.observability import record_event_error
+
+        record_event_error(f"slash:{cmd}", summary)
         try:
             if interaction.response.is_done():
                 await interaction.followup.send(COMMAND_ERROR_MESSAGE, ephemeral=True)
@@ -162,8 +275,53 @@ class TramiceBot(commands.Bot):
                 await interaction.response.send_message(
                     COMMAND_ERROR_MESSAGE, ephemeral=True
                 )
-        except discord.DiscordException:
-            log.exception("Failed to send command error response")
+        except discord.DiscordException as exc:
+            log_discord_error(
+                log,
+                "Failed to send command error response",
+                exc,
+                command=cmd,
+                user_id=uid,
+            )
+
+    def health_snapshot_lines(self) -> list[str]:
+        """Build Discord/runtime lines for /health."""
+        from bot.capabilities import load_capabilities_snapshot
+
+        snap = load_capabilities_snapshot(self.settings)
+        runtime = get_runtime_health()
+        lines = [
+            f"- Gateway : {'connecté ✅' if self.is_ready() else 'non prêt ❌'}",
+        ]
+        if self.latency is not None:
+            lines.append(f"- Latence gateway : {round(self.latency * 1000)} ms")
+        lines.append(
+            f"- File router : {self.router.queue_depth} requête(s) en attente"
+        )
+        scanned = snap.get("scanned_at") if snap else None
+        lines.append(
+            f"- Dernière analyse capacités : {scanned or 'jamais'}"
+        )
+        if runtime["last_job_error_id"]:
+            lines.append(
+                f"- Dernière erreur job : `{runtime['last_job_error_id']}` "
+                f"({runtime['last_job_error_at']})"
+            )
+        else:
+            lines.append("- Dernière erreur job : aucune")
+        if runtime["last_event_error"]:
+            lines.append(
+                f"- Dernière erreur événement : {runtime['last_event_error']} "
+                f"({runtime['last_event_error_at']})"
+            )
+        else:
+            lines.append("- Dernière erreur événement : aucune")
+        if runtime["event_error_count"] or runtime["job_error_count"]:
+            lines.append(
+                f"- Compteurs erreurs : {runtime['event_error_count']} événement(s), "
+                f"{runtime['job_error_count']} job(s)"
+            )
+        return lines
 
     async def post_to_channel(self, channel_id: str, text: str) -> None:
         """Send text (chunked) to a channel by id; used by scheduled jobs."""
@@ -173,8 +331,10 @@ class TramiceBot(commands.Bot):
             )
             for chunk in split_message(text):
                 await channel.send(chunk)
-        except (discord.DiscordException, ValueError):
-            log.exception("post_to_channel failed for %s", channel_id)
+        except (discord.DiscordException, ValueError) as exc:
+            log_discord_error(
+                log, "post_to_channel failed", exc, channel_id=channel_id
+            )
 
     async def close(self) -> None:
         if self.scheduler is not None:
@@ -210,6 +370,9 @@ class TramiceBot(commands.Bot):
                         created_at=message.created_at.isoformat(),
                     )
                 )
+                identity = getattr(self.services, "identity", None) if self.services else None
+                if identity is not None:
+                    identity.record_alias(str(message.author.id), message.author.display_name)
             except Exception:  # noqa: BLE001
                 log.exception("Failed to log message")
 
@@ -230,10 +393,25 @@ class TramiceBot(commands.Bot):
             trigger=trigger,
         )
         req.reply = message.channel.send
-        async with message.channel.typing():
-            result = await self.router.submit(req)
-        if result.status is not SubmitStatus.ACCEPTED and result.message:
-            await message.channel.send(result.message)
+        try:
+            async with message.channel.typing():
+                result = await self.router.submit(req)
+            if result.status is not SubmitStatus.ACCEPTED and result.message:
+                await safe_channel_send(
+                    message.channel,
+                    result.message,
+                    logger=log,
+                    context="on_message.rejection",
+                )
+        except discord.DiscordException as exc:
+            log_discord_error(
+                log,
+                "on_message handler failed",
+                exc,
+                event="on_message",
+                channel_id=channel_id,
+                user_id=str(message.author.id),
+            )
 
 
 def _never_prefix(bot, message):  # noqa: ANN001 - discord.py signature

@@ -235,6 +235,43 @@ CREATE TABLE IF NOT EXISTS echoes (
     read          INTEGER DEFAULT 0,
     created_at    TEXT NOT NULL
 );
+
+-- Post-MVP: deletion traces, member identity --------------------------------
+CREATE TABLE IF NOT EXISTS activity_traces (
+    user_id         TEXT PRIMARY KEY,
+    display_name    TEXT,
+    first_activity  TEXT,
+    last_activity   TEXT,
+    message_count   INTEGER NOT NULL DEFAULT 0,
+    forgotten_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS member_aliases (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id       TEXT NOT NULL,
+    name          TEXT NOT NULL,
+    first_seen    TEXT NOT NULL,
+    last_seen     TEXT NOT NULL,
+    is_current    INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (user_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS identity_links (
+    user_id_a     TEXT NOT NULL,
+    user_id_b     TEXT NOT NULL,
+    linked_by     TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    PRIMARY KEY (user_id_a, user_id_b),
+    CHECK (user_id_a < user_id_b)
+);
+
+-- Per-user preferences: chosen Ollama chat model (falls back to the global
+-- default when absent). Set via /modele, cleared on /forgetme.
+CREATE TABLE IF NOT EXISTS user_model_prefs (
+    discord_user_id   TEXT PRIMARY KEY,
+    model             TEXT NOT NULL,
+    updated_at        TEXT NOT NULL
+);
 """
 
 
@@ -286,6 +323,30 @@ class Database:
             self.app.close()
             self.history.close()
 
+    # ---- per-user model preference ------------------------------------
+    def get_user_model(self, user_id: str) -> str | None:
+        """Return the user's chosen chat model, or None to use the default."""
+        row = self.query_app_one(
+            "SELECT model FROM user_model_prefs WHERE discord_user_id = ?",
+            (user_id,),
+        )
+        return row["model"] if row else None
+
+    def set_user_model(self, user_id: str, model: str) -> None:
+        self.execute_app(
+            "INSERT INTO user_model_prefs(discord_user_id, model, updated_at) "
+            "VALUES (?, ?, ?) "
+            "ON CONFLICT(discord_user_id) DO UPDATE SET "
+            "model = excluded.model, updated_at = excluded.updated_at",
+            (user_id, model, utcnow()),
+        )
+
+    def clear_user_model(self, user_id: str) -> int:
+        return self.execute_app(
+            "DELETE FROM user_model_prefs WHERE discord_user_id = ?",
+            (user_id,),
+        ).rowcount
+
     # ---- generic helpers ----------------------------------------------
     def execute_app(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
         with self._lock:
@@ -310,6 +371,10 @@ class Database:
     def query_history(self, sql: str, params: tuple = ()) -> list[sqlite3.Row]:
         with self._lock:
             return self.history.execute(sql, params).fetchall()
+
+    def query_history_one(self, sql: str, params: tuple = ()) -> sqlite3.Row | None:
+        with self._lock:
+            return self.history.execute(sql, params).fetchone()
 
 
 def build_database(settings) -> Database:

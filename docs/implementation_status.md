@@ -17,7 +17,8 @@ in the weekly HOP cycle during the *Laboratoire tramiciel n°721* playtest.
 
 The bot runs entirely on your own hardware:
 
-- **Ollama** for chat and embeddings (default: `qwen2.5:7b-instruct`, `nomic-embed-text`)
+- **Ollama** for chat and embeddings (default: `qwen2.5:7b-instruct`, `nomic-embed-text`;
+  per-user chat model selectable via `/modele`)
 - **LangGraph** react agent with per-thread conversational memory
 - **Chroma** RAG over project documents and (optionally) indexed salon history
 - **SQLite** for domain data, message logs, and agent checkpoints
@@ -49,8 +50,9 @@ and not multi-server sync (all explicitly out of scope for v1).
 3. **The bot** answers game questions from RAG, maintains volios and Échos,
    proposes events and matchmaking, simulates the weekly HOP cycle, and posts
    scheduled summaries and game announcements.
-4. **Admins** swap models, reindex documents, adjust social norms, and check
-   health via slash commands.
+4. **Admins** swap the community default model, reindex documents, adjust social
+   norms, and check health via slash commands. Any trammer can also pick their
+   own chat model with `/modele`.
 
 Before going live, operators must set `channels.allowlist` in `config.yaml`, post
 the AI-logging notice ([`ai_logging_notice.md`](ai_logging_notice.md)), and
@@ -101,9 +103,11 @@ A focused pass before first Discord connection added:
 - Heartbeat file for Docker/system health probes (`data/.health`)
 - Startup config warnings (empty allowlist, missing `GUILD_ID`, etc.)
 - **Strict allowlist policy**: empty `allowlist` = DMs only (no salon access)
-- Extended `/forgetme`: checkpoints + Chroma `history` embeddings
+- Extended `/forgetme`: checkpoints + Chroma `history` embeddings (+ model pref)
 - AI-logging notice template, systemd `EnvironmentFile`, Docker healthchecks
 - `tests/` suite (13 tests) and GitHub Actions CI
+- **Per-user model selection** (`/modele`): trammers choose their own Ollama chat
+  model with caution messaging; stored in `user_model_prefs`, resolved per turn
 
 ---
 
@@ -164,14 +168,27 @@ bots (PLT-5).
 **Slash commands (all registered):**
 
 - Everyone: `/ask`, `/summarize`, `/volio`, `/mondo`, `/echoes`, `/event`,
-  `/mission`, `/place`, `/vote`, `/signalement`, `/normes`, `/forgetme`
+  `/mission`, `/place`, `/vote`, `/signalement`, `/normes`, `/modele`, `/forgetme`
 - Admin: `/model`, `/reindex`, `/norm-set`, `/health`
+
+**Model selection:** `/modele` lets each trammer choose a locally-installed chat
+model for their own conversations (autocomplete, embedding model filtered out,
+ephemeral replies with a caution note). The preference is stored in `app.sqlite`
+(`user_model_prefs`) and cleared by `/forgetme`. Admin `/model` sets the runtime
+default for everyone else (not persisted). Resolution per turn: per-user choice →
+admin default → `llm.model` from `config.yaml`.
+
+Models without tool-calling support (e.g. `gemma2:9b`) are detected via
+`ollama show` capabilities and run as a **no-tools** react agent (persona +
+memory, no tools); a runtime fallback also rebuilds without tools if inference
+returns "does not support tools". `/modele` warns the user in that case.
 
 ### AI layer (`ai/`)
 
 | Component | File(s) | Implemented |
 |-----------|---------|-------------|
-| Ollama client | `ollama_client.py` | Chat, ping, model list/swap |
+| Ollama client | `ollama_client.py` | Chat (per-call model override), ping, model list/swap |
+| Model resolution | `responder.py` (`resolve_model`) | Per-user model → default; used by agent + direct responder |
 | Persona | `persona.py` | System prompt from `prompts/tramice721_system.txt`; salon vs DM addendum |
 | Direct fallback | `responder.py` | Single-turn responder if agent fails to load |
 | LangGraph agent | `agent/graph.py` | React agent, checkpointer, tool-call cap, turn logging |
@@ -188,7 +205,7 @@ Optional Ollama Modelfile: `prompts/tramice721_modelfile`.
 | Service | File | Implemented |
 |---------|------|-------------|
 | Identity | `identity.py` | Trammers, volios, confidences, public profiles |
-| Memory | `memory.py` | Logging facade, extended `/forgetme` |
+| Memory | `memory.py` | Logging facade, extended `/forgetme` (incl. model pref) |
 | Knowledge | `knowledge.py` | RAG search, reindex |
 | Matchmaking | `matchmaking.py` | Synergies, Échos (propose-only) |
 | Coordination | `coordination.py` | Events, RSVPs, teams |
@@ -203,7 +220,7 @@ Not present as a separate module: `services/platform.py` (logic lives in `bot/`)
 
 | Store | File | Purpose |
 |-------|------|---------|
-| `app.sqlite` | `db.py` | Trammers, volios, entities, game, governance |
+| `app.sqlite` | `db.py` | Trammers, volios, entities, game, governance, per-user model prefs |
 | `history.sqlite` | `history.py` | Message log with soft-delete |
 | `checkpoints.sqlite` | LangGraph | Per-thread agent memory |
 | Checkpoint cleanup | `checkpoints.py` | Delete threads on `/forgetme` |

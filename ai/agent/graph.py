@@ -21,8 +21,9 @@ from langgraph.prebuilt import create_react_agent
 
 from ai.agent.state import AgentState
 from ai.ollama_client import make_chat_model
+from bot.capabilities import build_capabilities_note, capabilities_signature, load_capabilities_snapshot
 from ai.persona import build_system_prompt
-from ai.responder import OLLAMA_DOWN, load_social_norms
+from ai.responder import OLLAMA_DOWN, load_social_norms, resolve_model
 from bot.router import AgentRequest
 
 from bot.observability import log_turn
@@ -31,6 +32,9 @@ log = logging.getLogger("tramice.agent")
 
 # ~5 tool calls per turn (spec §3.2): each call is ~2 graph steps, plus slack.
 RECURSION_LIMIT = 12
+
+# Substring Ollama returns (HTTP 400) when a model lacks tool-calling support.
+TOOLS_UNSUPPORTED_MARKER = "does not support tools"
 
 
 def _count_tool_calls(messages: list) -> int:
@@ -64,6 +68,9 @@ class AgentResponder:
         self._conn: aiosqlite.Connection | None = None
         self._agents: dict[tuple, object] = {}
         self._init_lock = asyncio.Lock()
+        # Cache of per-model tool-calling support (probed via Ollama `show`,
+        # corrected at runtime if inference reports otherwise).
+        self._tool_support: dict[str, bool] = {}
 
     # ---- lifecycle -----------------------------------------------------
     async def _ensure_checkpointer(self) -> AsyncSqliteSaver:
@@ -84,6 +91,14 @@ class AgentResponder:
         """Invalidate cached agents so the new model is used next turn."""
         self._agents.clear()
 
+    async def _model_supports_tools(self, model: str) -> bool:
+        """Return (and cache) whether ``model`` can do tool calling."""
+        if model not in self._tool_support:
+            self._tool_support[model] = await self.ollama.supports_tools(model)
+            if not self._tool_support[model]:
+                log.info("Model %s has no tool support; using a no-tools agent", model)
+        return self._tool_support[model]
+
     def _norms_signature(self, norms: dict) -> str:
         return hashlib.sha1(
             json.dumps(norms, sort_keys=True).encode("utf-8")
@@ -102,17 +117,32 @@ class AgentResponder:
             self._mcp_tools = []
         return self._mcp_tools
 
-    async def _get_agent(self, surface: str, norms: dict):
-        model = self.ollama.model
-        key = (model, surface, self._norms_signature(norms))
+    def _capabilities_signature(self) -> str:
+        return hashlib.sha1(
+            capabilities_signature(self.settings).encode("utf-8")
+        ).hexdigest()[:8]
+
+    async def _get_agent(self, surface: str, norms: dict, model: str, with_tools: bool):
+        key = (
+            model,
+            surface,
+            self._norms_signature(norms),
+            self._capabilities_signature(),
+            with_tools,
+        )
         agent = self._agents.get(key)
         if agent is not None:
             return agent
         saver = await self._ensure_checkpointer()
-        mcp_tools = await self._ensure_mcp_tools()
         chat_model = make_chat_model(self.settings, model=model)
-        system_prompt = build_system_prompt(surface, norms)
-        tools = list(self._tools_provider()) + list(mcp_tools)
+        cap_snap = load_capabilities_snapshot(self.settings)
+        cap_note = build_capabilities_note(cap_snap)
+        system_prompt = build_system_prompt(surface, norms, capabilities_note=cap_note)
+        if with_tools:
+            mcp_tools = await self._ensure_mcp_tools()
+            tools = list(self._tools_provider()) + list(mcp_tools)
+        else:
+            tools = []
         agent = create_react_agent(
             chat_model,
             tools=tools,
@@ -126,7 +156,7 @@ class AgentResponder:
     # ---- responder API -------------------------------------------------
     async def respond(self, req: AgentRequest) -> str:
         started = time.monotonic()
-        model = self.ollama.model
+        model = resolve_model(self.db, self.ollama, req.user_id)
         if not await self.ollama.ping():
             log_turn(
                 user_id=req.user_id,
@@ -139,7 +169,8 @@ class AgentResponder:
             )
             return OLLAMA_DOWN
         norms = load_social_norms(self.db)
-        agent = await self._get_agent(req.surface, norms)
+        with_tools = await self._model_supports_tools(model)
+        agent = await self._get_agent(req.surface, norms, model, with_tools)
         config = {
             "configurable": {"thread_id": req.thread_id},
             "recursion_limit": RECURSION_LIMIT,
@@ -155,19 +186,45 @@ class AgentResponder:
         try:
             result = await agent.ainvoke(state_in, config=config)
         except Exception as exc:  # noqa: BLE001
-            log.exception("Agent invocation failed")
-            log_turn(
-                user_id=req.user_id,
-                channel_id=req.channel_id,
-                guild_id=req.guild_id,
-                trigger=req.trigger,
-                duration_ms=(time.monotonic() - started) * 1000,
-                model=model,
-                status="error",
-            )
-            if "connect" in str(exc).lower():
-                return OLLAMA_DOWN
-            return "Oups, une petite turbulence de mon côté. Peux-tu reformuler ?"
+            if with_tools and TOOLS_UNSUPPORTED_MARKER in str(exc).lower():
+                # The model can't do tool calling after all: remember this,
+                # rebuild a no-tools agent, and retry once so the user still
+                # gets an answer (with persona + memory, minus tools).
+                log.warning(
+                    "Model %s rejected tools at runtime; retrying without tools",
+                    model,
+                )
+                self._tool_support[model] = False
+                with_tools = False
+                agent = await self._get_agent(req.surface, norms, model, False)
+                try:
+                    result = await agent.ainvoke(state_in, config=config)
+                except Exception:  # noqa: BLE001
+                    log.exception("No-tools retry failed for model %s", model)
+                    log_turn(
+                        user_id=req.user_id,
+                        channel_id=req.channel_id,
+                        guild_id=req.guild_id,
+                        trigger=req.trigger,
+                        duration_ms=(time.monotonic() - started) * 1000,
+                        model=model,
+                        status="error",
+                    )
+                    return "Oups, une petite turbulence de mon côté. Peux-tu reformuler ?"
+            else:
+                log.exception("Agent invocation failed")
+                log_turn(
+                    user_id=req.user_id,
+                    channel_id=req.channel_id,
+                    guild_id=req.guild_id,
+                    trigger=req.trigger,
+                    duration_ms=(time.monotonic() - started) * 1000,
+                    model=model,
+                    status="error",
+                )
+                if "connect" in str(exc).lower():
+                    return OLLAMA_DOWN
+                return "Oups, une petite turbulence de mon côté. Peux-tu reformuler ?"
         messages = result.get("messages", [])
         tool_calls = _count_tool_calls(messages)
         log_turn(

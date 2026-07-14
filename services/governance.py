@@ -43,11 +43,22 @@ class BallotResult:
     threshold: float
 
 
+@dataclass
+class ModerationSuggestion:
+    target_id: str
+    open_count: int
+    level3_count: int
+    action: str
+    reasons: list[str]
+    message: str
+
+
 class GovernanceService:
-    def __init__(self, db: Database, history: HistoryStore, knowledge=None):
+    def __init__(self, db: Database, history: HistoryStore, knowledge=None, settings=None):
         self.db = db
         self.history = history
         self.knowledge = knowledge
+        self.settings = settings
 
     # ---- social norms (GOV-10..12) ------------------------------------
     def get_social_norms(self) -> dict:
@@ -171,6 +182,62 @@ class GovernanceService:
             (reporter_id, spec.target_id, level, spec.description, utcnow()),
         )
         return int(cur.lastrowid)
+
+    def evaluate_moderation(self, target_id: str | None) -> ModerationSuggestion | None:
+        """Suggest suspend/ban to admins when signalement thresholds are crossed."""
+        if not target_id:
+            return None
+        threshold = 3
+        if self.settings is not None:
+            threshold = int(self.settings.get("governance.escalation_threshold", 3))
+
+        rows = self.db.query_app(
+            "SELECT level, description FROM signalements "
+            "WHERE target_id = ? AND status = 'open'",
+            (target_id,),
+        )
+        if not rows:
+            return None
+
+        open_count = len(rows)
+        level3_count = sum(1 for r in rows if int(r["level"]) >= 3)
+        norms = self.get_social_norms()
+        reasons: list[str] = []
+        if level3_count:
+            reasons.append(f"{level3_count} signalement(s) de niveau 3 (danger immédiat).")
+        if open_count >= threshold:
+            reasons.append(f"{open_count} signalement(s) ouverts (seuil {threshold}).")
+        if norms.get("dm_always_private"):
+            reasons.append("Norme : les DM restent privés — vérifier les fuites de confidences.")
+        if norms.get("confidences_never_shared"):
+            reasons.append("Norme : les confidences ne doivent jamais être partagées.")
+
+        if level3_count >= 1:
+            action = "suspendre ou bannir"
+        elif open_count >= threshold:
+            action = "suspendre temporairement ou médiation renforcée"
+        else:
+            return None
+
+        excerpts = [r["description"][:120] for r in rows[:3]]
+        message = (
+            f"**Suggestion de modération (Tramice721 ne peut pas agir seule)**\n"
+            f"Membre ciblé : <@{target_id}>\n"
+            f"Action suggérée : {action}\n"
+            f"Raisons :\n"
+            + "\n".join(f"- {r}" for r in reasons)
+            + "\nExtraits récents :\n"
+            + "\n".join(f"- {e}" for e in excerpts)
+            + "\nDécision humaine requise (GOV-2)."
+        )
+        return ModerationSuggestion(
+            target_id=target_id,
+            open_count=open_count,
+            level3_count=level3_count,
+            action=action,
+            reasons=reasons,
+            message=message,
+        )
 
     def open_tribunal(self, signalement_id: int) -> str:
         tribunal_id = str(uuid.uuid4())

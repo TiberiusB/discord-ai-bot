@@ -63,7 +63,7 @@ def build_services(settings, db: Database, history: HistoryStore) -> Services:
         services.matchmaking = MatchmakingService(db, services.identity, services.knowledge)
         services.coordination = CoordinationService(db)
         services.ecosystem = EcosystemService(db)
-        services.governance = GovernanceService(db, history, services.knowledge)
+        services.governance = GovernanceService(db, history, services.knowledge, settings)
     except ImportError:
         pass
 

@@ -11,7 +11,8 @@ in the weekly HOP cycle during the *Laboratoire tramiciel n°721* playtest.
 
 The bot runs entirely on your own hardware:
 
-- **Ollama** for chat and embeddings (default: `qwen2.5:7b-instruct`, `nomic-embed-text`)
+- **Ollama** for chat and embeddings (default: `qwen2.5:7b-instruct`, `nomic-embed-text`;
+  trammers can select their own chat model with `/modele`)
 - **LangGraph** react agent with per-thread conversational memory
 - **Chroma** RAG over project documents and (optionally) indexed salon history
 - **SQLite** for domain data, message logs, and agent checkpoints
@@ -129,8 +130,15 @@ ollama pull qwen2.5:7b-instruct
 ollama pull nomic-embed-text
 ```
 
-Optional experiments: `mistral`, `gemma2:9b`, `phi3.5`, `deepseek-r1` (weaker at
-tool calling on CPU).
+Any additional chat model you pull becomes selectable per-user via `/modele`
+(see [Choosing your model](#choosing-your-model-modele)). A tested alternative:
+
+```bash
+ollama pull gemma2:9b
+```
+
+Other experiments: `mistral`, `phi3.5`, `deepseek-r1` (weaker at tool calling on
+CPU).
 
 ### 3. Configure secrets and channels
 
@@ -226,19 +234,46 @@ message when rate-limited; slash commands bypass user cooldown.
 | `/vote` | List, open, or cast votes (with confirmation) |
 | `/signalement` | File a graduated report (confidential) |
 | `/normes` | Show current social norms |
+| `/modele` | Choose your personal chat model (affects only your own conversations) |
 | `/forgetme` | Delete your stored messages, profile, checkpoints, and RAG fragments |
 
 ### Admin
 
 | Command | Description |
 |---------|-------------|
-| `/model` | Swap the Ollama model at runtime |
+| `/model` | Change the **default** Ollama model for the whole community (runtime; not persisted) |
 | `/reindex` | Rebuild the Chroma document index |
 | `/norm-set` | Update a social norm |
 | `/health` | Report Ollama, SQLite, Chroma, and scheduler status |
 
 Mutations (`/place`, `/event` propose, `/vote` cast) show **✅ Confirmer /
 ❌ Annuler** buttons before anything is committed.
+
+### Choosing your model (`/modele`)
+
+Any trammer can pick which locally-installed Ollama model answers **their own**
+conversations, without affecting anyone else:
+
+- `/modele` — show your current model and the list of installed chat models.
+- `/modele nom:<model>` — switch to a model (e.g. `gemma2:9b`). Must be installed
+  in Ollama; the embedding model is filtered out of the choices.
+- `/modele nom:defaut` — clear your choice and fall back to the community default.
+
+The command replies **ephemerally** with a caution note: models differ in
+answer quality, speed, and tool-calling reliability (larger models like
+`gemma2:9b` are slower on CPU). A change takes effect on your **next message**,
+your conversation memory is preserved, and your preference persists across
+restarts (stored in `app.sqlite`; cleared by `/forgetme`).
+
+Resolution order per turn: **your `/modele` choice → admin `/model` default →
+`llm.model` from `config.yaml`**.
+
+**Tool calling:** some models (e.g. `gemma2:9b`) don't support Ollama's
+tool-calling API. The bot detects this (via `ollama show` capabilities) and runs
+those models as a **no-tools** agent — full persona and conversation memory, but
+without tools like knowledge search, volios, or events. `/modele` warns you when
+a chosen model lacks tool support. For the full toolset, pick a tool-capable
+model such as `qwen2.5:7b-instruct`.
 
 ---
 
@@ -252,7 +287,7 @@ bot:
   timezone: America/Montreal
 
 llm:
-  model: qwen2.5:7b-instruct
+  model: qwen2.5:7b-instruct   # community default; per-user override via /modele
   embed_model: nomic-embed-text
 
 channels:
@@ -377,14 +412,16 @@ Set `LOG_JSON=1` in production for structured turn and job logging.
 
 | Symptom | Check |
 |---------|-------|
-| Bot exits immediately | `DISCORD_TOKEN` set in `.env`? |
+| Bot exits immediately | `DISCORD_TOKEN` set in `.env`? Check logs for `LoginFailure` or `PrivilegedIntentsRequired` |
 | Bot ignores salon messages | `channels.allowlist` includes that channel ID? |
 | "Mon moteur de réflexion est indisponible" | `ollama serve` running? Model pulled? |
 | RAG returns nothing | Run `python -m ai.rag.ingest`; verify `nomic-embed-text` |
-| Slash commands missing | Set `GUILD_ID`; restart bot; wait for guild sync |
+| Slash commands missing | Set `GUILD_ID`; restart bot; check logs for `sync failed` |
 | Cooldown / busy message | Queue full or rate limit; wait and retry |
 | Slow replies | CPU-only 7B is multi-second; one LLM request at a time |
 | Docker unhealthy | Bot running? Check `data/.health` timestamp |
+| Discord/gateway issues at connect | Set `DISCORD_LOG_LEVEL=INFO` in `.env`; watch gateway logs |
+| Permission errors (403) | Run `/health`; check capability scan + `HTTP code=50013` in logs |
 
 Smoke checks:
 

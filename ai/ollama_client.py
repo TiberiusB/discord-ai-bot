@@ -43,6 +43,26 @@ class OllamaClient:
             log.warning("Ollama ping failed: %s", exc)
             return False
 
+    async def supports_tools(self, model: str | None = None) -> bool:
+        """Whether the model advertises the ``tools`` capability.
+
+        Uses Ollama's ``show`` endpoint. On any uncertainty we return ``True``
+        (optimistic): the agent has a runtime fallback that rebuilds without
+        tools if inference still reports the model does not support them.
+        """
+        target = model or self._model
+        try:
+            info = await self._client.show(target)
+        except Exception as exc:  # noqa: BLE001 - capability probe must not raise
+            log.warning("Could not probe capabilities for %s: %s", target, exc)
+            return True
+        caps = getattr(info, "capabilities", None)
+        if caps is None and isinstance(info, dict):
+            caps = info.get("capabilities")
+        if not caps:
+            return True
+        return "tools" in caps
+
     async def list_models(self) -> list[str]:
         try:
             resp = await self._client.list()

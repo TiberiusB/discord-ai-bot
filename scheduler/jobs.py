@@ -111,6 +111,17 @@ def build_scheduler(bot) -> AsyncIOScheduler:
         )
         if settings.summary_channel_id:
             await bot.post_to_channel(settings.summary_channel_id, msg)
+        from bot.discord_actions import create_scheduled_event
+
+        discord_eid = await create_scheduled_event(
+            bot,
+            title=f"Semaine jeu {week.week_id}",
+            description=msg[:900],
+            starts_at=datetime.now(timezone.utc).isoformat(),
+            location="Discord — La Guilde",
+            duration_min=180,
+        )
+        fields["discord_event_id"] = discord_eid
 
     async def game_week_close(fields: dict) -> None:
         log.info("job:game_week_close start")
@@ -153,6 +164,19 @@ def build_scheduler(bot) -> AsyncIOScheduler:
         _wrap_job("game_week_close", game_week_close),
         CronTrigger(day_of_week="sun", hour=23, minute=59, timezone=tz),
         id="game_week_close",
+    )
+
+    async def capability_scan(fields: dict) -> None:
+        from bot.capabilities import scan_capabilities
+
+        snap = await scan_capabilities(bot)
+        fields["guild_id"] = snap.get("guild_id")
+        fields["channels"] = len(snap.get("channels") or {})
+
+    scheduler.add_job(
+        _wrap_job("capability_scan", capability_scan),
+        CronTrigger(hour=4, minute=0, timezone=tz),
+        id="capability_scan",
     )
     return scheduler
 
