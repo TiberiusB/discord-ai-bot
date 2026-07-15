@@ -14,7 +14,7 @@ The bot runs entirely on your own hardware:
 - **Ollama** for chat and embeddings (default: `qwen2.5:7b-instruct`, `nomic-embed-text`;
   trammers can select their own chat model with `/modele`)
 - **LangGraph** react agent with per-thread conversational memory
-- **Chroma** RAG over project documents and (optionally) indexed salon history
+- **Chroma** RAG over project documents, admin-curated web sources, and (optionally) indexed salon history
 - **SQLite** for domain data, message logs, and agent checkpoints
 - **MCP tools** (stdio) for server overview and semantic search
 
@@ -41,11 +41,11 @@ and not multi-server sync (all explicitly out of scope for v1).
    server.
 2. **Trammers** talk to Tramice721 in allowlisted salons (`!ai`, `@mention`,
    slash commands) or in DMs (personal-tramice mode).
-3. **The bot** answers game questions from RAG, maintains volios and Échos,
-   proposes events and matchmaking, simulates the weekly HOP cycle, and posts
-   scheduled summaries and game announcements.
-4. **Admins** swap models, reindex documents, adjust social norms, and check
-   health via slash commands.
+3. **The bot** answers game questions from RAG (local docs + curated web sources),
+   maintains volios and Échos, proposes events and matchmaking, simulates the weekly
+   HOP cycle, and posts scheduled summaries and game announcements.
+4. **Admins** swap models, reindex local docs and/or curated web sources, manage
+   web knowledge via `/web-source`, adjust social norms, and check health via slash commands.
 
 
 | Doc | Purpose |
@@ -89,7 +89,8 @@ Discord (salons · DMs · slash commands)
         ┌───────────────┴───────────────┐
         ▼                               ▼
   SQLite                          Chroma
-  app · history · checkpoints     docs · history
+  app · history · checkpoints     docs · history · web
+                                  (web ← admin `/web-source`)
 ```
 
 ---
@@ -163,6 +164,7 @@ an allowlist.
 ### 4. Initialize data
 
 ```bash
+source venv/bin/activate   # required — project deps live in venv, not system python3
 python -m storage.db      # creates data/app.sqlite + data/history.sqlite
 python -m ai.rag.ingest   # indexes docs/ into Chroma (Ollama must be up)
 ```
@@ -200,7 +202,8 @@ in [`docs/planning.md`](docs/planning.md) Phase 0.
 3. Add salon channel IDs to `channels.allowlist` in `config.yaml`.
 4. Set `channels.summary_channel_id` if you want daily summaries or game posts.
 5. Post the AI-logging notice from [`docs/ai_logging_notice.md`](docs/ai_logging_notice.md).
-6. Run `pytest tests/ -q`, then start the bot and smoke-test `/ask`, a DM, and `/health`.
+6. Run `pytest tests/ -q`, then start the bot and smoke-test `/ask`, a DM, `/health`, and (admin) `/web-source list`.
+7. (Optional, admin) Curate LaTramice.net: `/web-source add url:https://latramice.net/boutique-tramicielle-2/ label:Boutique`
 
 ---
 
@@ -247,13 +250,25 @@ message when rate-limited; slash commands bypass user cooldown.
 | Command | Description |
 |---------|-------------|
 | `/model` | Change the **default** Ollama model (dropdown; runtime; not persisted) |
-| `/reindex` | Rebuild the Chroma document index |
+| `/reindex` | Rebuild RAG index (`scope`: local docs, curated web, or both) |
+| `/web-source add` | Register and crawl a web URL (same domain, admin-curated) |
+| `/web-source list` | List indexed web sources and status |
+| `/web-source remove` | Remove a web source and its RAG fragments |
 | `/norm-set` | Update a social norm |
 | `/health` | Ollama, SQLite, Chroma, scheduler, gateway, capability scan, error counters |
 | `/say` | Send a TTS message in the current channel (`features.tts` must be enabled) |
 
 Mutations (`/place`, `/event` propose, `/vote` cast) show **✅ Confirmer /
 ❌ Annuler** buttons before anything is committed.
+
+**Curating web knowledge (admin):**
+
+1. `/web-source add url:https://latramice.net/... label:Boutique` — crawl same domain, embed into Chroma `web`
+2. `/web-source list` — verify pages/chunks indexed
+3. `/reindex scope:web` — refresh all registered sources after site updates
+4. `/web-source remove url:...` — de-index a stale source
+
+Members' `/ask` queries search both local `docs/` and curated `web` sources via `search_knowledge`.
 
 ### Choosing your model (`/modele`)
 
@@ -307,7 +322,7 @@ channels:
 features:
   game_simulation: true
   matchmaking: true
-  web_fetch: false             # optional MCP fetch for latramice.net
+  web_fetch: false             # optional live MCP fetch (separate from curated web RAG)
   tts: true                    # admin /say (requires SEND_TTS_MESSAGES)
 
 governance:
@@ -316,6 +331,14 @@ governance:
 rate_limit:
   per_user_cooldown_sec: 10
   max_queue_depth: 20
+
+rag:
+  collections: [docs, history, web]
+  web:
+    max_depth: 2          # same-domain crawl depth per seed URL
+    max_pages: 25         # max pages per source
+    fetch_timeout_sec: 15
+    require_allowlist: false  # true = seed domain must be in fetch_allowlist
 ```
 
 In **allowlist** mode, an empty `allowlist` means the bot responds in **DMs only**
@@ -341,6 +364,7 @@ All times are **America/Montreal** (configurable in `config.yaml`).
 |-----|----------|--------|
 | `index_new_messages` | Daily 02:00 | Embed new salon messages → Chroma `history` |
 | `refresh_knowledge_base` | Sunday 03:00 | Re-ingest `docs/` if changed |
+| `refresh_web_sources` | Sunday 03:30 | Re-crawl admin-curated web sources → Chroma `web` |
 | `build_daily_summary` | Daily 08:00 | Post summary to `summary_channel_id` |
 | `game_week_open` | Thursday 17:00 | Open investment window; announce budgets; optional Discord scheduled event |
 | `game_week_close` | Sunday 23:59 | Close window; finalize HOP allocations |
@@ -359,7 +383,7 @@ discord-ai-bot/
 ├── services/            # Domain services (identity, game, governance, …)
 ├── ai/
 │   ├── agent/           # LangGraph react agent, tools, state
-│   └── rag/             # Chroma ingest, retrieval, privacy helpers
+│   └── rag/             # Chroma ingest, web crawl, retrieval, privacy
 ├── mcp_servers/         # stdio MCP servers (discord_helper, rag_server)
 ├── storage/             # SQLite schemas, history, checkpoint cleanup
 ├── scheduler/           # APScheduler job definitions
@@ -436,6 +460,9 @@ Set `LOG_JSON=1` in production for structured turn and job logging.
 | Bot ignores salon messages | `channels.allowlist` includes that channel ID? |
 | "Mon moteur de réflexion est indisponible" | `ollama serve` running? Model pulled? |
 | RAG returns nothing | Run `python -m ai.rag.ingest`; verify `nomic-embed-text` |
+| Web RAG empty | `/web-source list` — any sources indexed? Ollama up during `/web-source add`? |
+| `/web-source add` fails | Bot needs outbound HTTP; check URL is public HTML (not JS-only SPA) |
+| Web links stripped in replies | Domain must be in curated sources or `fetch_allowlist` |
 | Slash commands missing | Set `GUILD_ID`; restart bot; check logs for `sync failed` |
 | Cooldown / busy message | Queue full or rate limit; wait and retry |
 | Slow replies | CPU-only 7B is multi-second; one LLM request at a time |
@@ -446,6 +473,7 @@ Set `LOG_JSON=1` in production for structured turn and job logging.
 Smoke checks:
 
 ```bash
+source venv/bin/activate
 python -m storage.db
 python -m ai.rag.ingest
 pip install -r requirements-dev.txt && pytest tests/ -q

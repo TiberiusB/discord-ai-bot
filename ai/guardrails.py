@@ -43,10 +43,16 @@ def sanitize_input(text: str) -> str:
     return _MASS_MENTION.sub(lambda m: m.group(0).replace("@", ""), text)
 
 
-def _allowed_hosts(settings) -> set[str]:
+def _allowed_hosts(settings, extra_hosts: set[str] | None = None) -> set[str]:
     hosts = set(_DEFAULT_ALLOWED_HOSTS)
     for host in settings.get("fetch_allowlist", []) or []:
         hosts.add(str(host).lower())
+    if extra_hosts:
+        for host in extra_hosts:
+            h = str(host).lower()
+            if h.startswith("www."):
+                h = h[4:]
+            hosts.add(h)
     return hosts
 
 
@@ -68,11 +74,16 @@ def _strip_disallowed_links(text: str, allowed: set[str]) -> str:
     return _URL_RE.sub(_check, text)
 
 
-def postprocess_output(text: str, settings, locale: str = "fr") -> str:
+def postprocess_output(
+    text: str,
+    settings,
+    locale: str = "fr",
+    extra_link_hosts: set[str] | None = None,
+) -> str:
     """Apply feminine self-reference + link allowlist to a model response."""
     if not text:
         return text
     if locale == "fr":
         text = _apply_feminine(text)
-    text = _strip_disallowed_links(text, _allowed_hosts(settings))
+    text = _strip_disallowed_links(text, _allowed_hosts(settings, extra_link_hosts))
     return text

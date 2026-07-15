@@ -81,11 +81,11 @@ MCP servers, scheduled jobs, SQLite schemas). Requirements are tagged
 
 | Tag                  | Service              | Responsibility                                                                                                                                              |
 | -------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `[knowledge]`        | **Knowledge**        | RAG over project docs and (optionally) indexed web resources. Game Q&A grounded in sources. NORA / source attribution. Links to LaTramice.net.              |
+| `[knowledge]`        | **Knowledge**        | RAG over project docs, admin-curated web sources, and (optionally) indexed salon history. Game Q&A grounded in sources. NORA / source attribution. Links to LaTramice.net. |
 | `[community-memory]` | **Community memory** | Log readable messages; power summaries, matchmaking, and RAG-over-history. Scheduled activity digests. `/forgetme` and retention policy.                    |
 | `[platform]`         | **Platform**         | Discord integration: salons, DMs, triggers, slash commands, permissions, rate limiting, queue, `@everyone` announcements.                                   |
 | `[persona]`          | **Persona**          | Tramice n°721 character, voice, and cross-cutting conversational behavior (not a business-logic service, but a presentation layer applied to all services). |
-| `[administration]`   | **Administration**   | Model swap, `/reindex`, config, feature flags, channel allow/deny, scheduled job configuration.                                                             |
+| `[administration]`   | **Administration**   | Model swap, `/reindex`, `/web-source`, config, feature flags, channel allow/deny, scheduled job configuration. |
 
 
 
@@ -414,11 +414,12 @@ Grounded answers and document retrieval.
 | KNW-2 | When uncertain, MUST hedge and attribute sources (NORA; "never affirm what is not 100% certain"). `[persona]`                                                                                             |
 | KNW-3 | SHOULD provide links to LaTramice.net resources where relevant.                                                                                                                                           |
 | KNW-4 | SHOULD explain game instruments (booklets, HOP, weekly cycle) accurately when asked. `[game]`                                                                                                             |
+| KNW-5 | SHOULD allow admins to register external web sources (seed URLs) for same-domain shallow crawl into RAG; members benefit via grounded `/ask` answers. `[administration]`                               |
 
 
-> **TODO:** MCP server with embedded link to LaTramice.net; schedule website
-> indexing/RAG. Rely primarily on local memory/RAG as the information source.
-> `[knowledge]` `[administration]`
+**Implemented (July 2026):** admin-curated web RAG via `/web-source add|list|remove`, Chroma `web` collection, scoped `/reindex`, and scheduled `refresh_web_sources`. Primary path for LaTramice.net content — not live browser fetch.
+
+> **TODO (future):** Browser-search MCP for JavaScript-heavy sites. `[knowledge]` `[administration]`
 
 ---
 
@@ -451,7 +452,7 @@ Operator-facing configuration and maintenance.
 | ID    | Requirement                                                                                           |
 | ----- | ----------------------------------------------------------------------------------------------------- |
 | ADM-1 | MUST support **model swap** (config + `/model` command) — the tramice "soul" is replaceable. Per-user override via `/modele`. |
-| ADM-2 | SHOULD support manual `/reindex` and scheduled indexing/summaries. `[knowledge]` `[community-memory]` |
+| ADM-2 | SHOULD support manual `/reindex` (scoped: docs, web, or all), `/web-source` curation, and scheduled indexing/summaries. `[knowledge]` `[community-memory]` |
 | ADM-3 | SHOULD expose channel allow/deny list and feature flags via `config.yaml` / `.env`.                   |
 | ADM-4 | SHOULD gate `@everyone` announcements behind explicit permission/config. `[platform]`                 |
 
@@ -546,7 +547,7 @@ Physical registers (paper; bot explains, does not replace): **Recognition Bookle
 | --------------------- | ---------------------------------------------------------------------------------- |
 | `[persona]`           | M6 system-prompt Modelfile; `ai/ollama_client.py`                                  |
 | `[platform]`          | M1 discord.py client, intents, triggers; `bot/handlers.py` routing                 |
-| `[knowledge]`         | M3 RAG: ingest `jeu.pdf` + annexes → Chroma; `semantic_search`; optional fetch MCP |
+| `[knowledge]`         | M3 RAG: ingest `docs/` → Chroma; curated web via `/web-source` → `web`; `search_knowledge` (docs+web); optional live fetch MCP |
 | `[identity]`          | M2/M4 SQLite profiles (volio, enterprise/quest dashboards); LangGraph checkpointer |
 | `[matchmaking]`       | M4 `discord_helper` MCP + agent tools; Échos notifications                         |
 | `[coordination]`      | M4 agent tools; calendar/scheduling helpers                                        |
@@ -554,7 +555,7 @@ Physical registers (paper; bot explains, does not replace): **Recognition Bookle
 | `[ecosystem-mapping]` | M4 `get_server_overview`; Mondo-style listing tools                                |
 | `[governance]`        | M4/M5 agent (summaries, votes, mediation, jury draw, social norms config)          |
 | `[community-memory]`  | M2 SQLite message log; M5 daily summary job                                        |
-| `[administration]`    | M1 `/model`, `/modele`; M3 `/reindex`; `bot/config.py`; M6 guardrails, rate-limit/queue; post-MVP `/health`, capability scan |
+| `[administration]`    | M1 `/model`, `/modele`; M3 `/reindex`, `/web-source`; `bot/config.py`; M6 guardrails, rate-limit/queue; post-MVP `/health`, capability scan |
 
 
 ---

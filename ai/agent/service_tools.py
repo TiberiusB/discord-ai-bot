@@ -26,10 +26,10 @@ def make_service_tools(settings, services) -> list:
         knowledge = services.knowledge
 
         def search_knowledge(query: str) -> str:
-            """Recherche dans les documents du projet (jeu, règles, HOP, carnets)."""
-            chunks = knowledge.search(query, collections=["docs"], k=4)
+            """Recherche dans les documents du projet et les sources web curatées."""
+            chunks = knowledge.search(query, collections=["docs", "web"], k=4)
             if not chunks:
-                return "Aucune source trouvée dans les documents."
+                return "Aucune source trouvée dans les documents ni les sources web."
             return "\n\n".join(
                 f"[source: {c.source}] {c.text[:500]}" for c in chunks
             )
@@ -41,9 +41,9 @@ def make_service_tools(settings, services) -> list:
                 description=(
                     "Rechercher des informations factuelles sur La Guilde des "
                     "Tramarades, les règles du jeu, les HOP, le cycle hebdomadaire "
-                    "et les carnets, à partir des documents du projet. À utiliser "
-                    "avant d'affirmer un fait sur le jeu. Retourne des extraits avec "
-                    "leur source."
+                    "et les carnets, à partir des documents locaux et des sources "
+                    "web curatées par les admins. À utiliser avant d'affirmer un "
+                    "fait sur le jeu ou le site. Retourne des extraits avec leur source."
                 ),
             )
         )

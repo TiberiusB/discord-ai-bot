@@ -20,7 +20,7 @@ The bot runs entirely on your own hardware:
 - **Ollama** for chat and embeddings (default: `qwen2.5:7b-instruct`, `nomic-embed-text`;
   per-user chat model selectable via `/modele`)
 - **LangGraph** react agent with per-thread conversational memory
-- **Chroma** RAG over project documents and (optionally) indexed salon history
+- **Chroma** RAG over project documents, admin-curated web sources, and (optionally) indexed salon history
 - **SQLite** for domain data, message logs, and agent checkpoints
 - **MCP tools** (stdio) for server overview and semantic search
 
@@ -47,12 +47,12 @@ and not multi-server sync (all explicitly out of scope for v1).
    server.
 2. **Trammers** talk to Tramice721 in allowlisted salons (`!ai`, `@mention`,
    slash commands) or in DMs (personal-tramice mode).
-3. **The bot** answers game questions from RAG, maintains volios and Échos,
-   proposes events and matchmaking, simulates the weekly HOP cycle, and posts
-   scheduled summaries and game announcements.
-4. **Admins** swap the community default model, reindex documents, adjust social
-   norms, and check health via slash commands. Any trammer can also pick their
-   own chat model with `/modele`.
+3. **The bot** answers game questions from RAG (local docs + curated web sources),
+   maintains volios and Échos, proposes events and matchmaking, simulates the weekly
+   HOP cycle, and posts scheduled summaries and game announcements.
+4. **Admins** swap the community default model, reindex local docs and/or curated
+   web sources (`/reindex`, `/web-source`), adjust social norms, and check health
+   via slash commands. Any trammer can also pick their own chat model with `/modele`.
 
 Before going live, operators must set `channels.allowlist` in `config.yaml`, post
 the AI-logging notice ([`ai_logging_notice.md`](ai_logging_notice.md)), and
@@ -87,7 +87,7 @@ and [`specifications.md`](specifications.md) §12.
 | **M0** | Repo skeleton, config, SQLite schemas | Complete |
 | **M1** | Discord client, triggers, persona, router, `/ask`, `/model` | Complete |
 | **M2** | Message log, `/forgetme`, LangGraph checkpointer, identity tables | Complete |
-| **M3** | Chroma RAG, doc ingest, `KnowledgeService`, `/reindex` | Complete |
+| **M3** | Chroma RAG, doc ingest, web ingest, `KnowledgeService`, `/reindex`, `/web-source` | Complete |
 | **M4** | MCP servers, community services, `/volio` `/mondo` `/echoes` `/event` `/summarize` `/normes` | Complete |
 | **M5** | APScheduler jobs, game simulation, `/mission` `/place` `/vote`, signalement | Complete |
 | **M6** | Guardrails, audit log, deployment assets, health checks | Complete |
@@ -152,7 +152,10 @@ Discord (salons · DMs · slash commands)
         ┌───────────────┴───────────────┐
         ▼                               ▼
   SQLite                          Chroma
-  app · history · checkpoints     docs · history
+  app · history · checkpoints     docs · history · web
+        │                               ▲
+        │ web_sources registry          │ admin `/web-source`
+        └───────────────────────────────┘
         │
         ▼
   APScheduler (jobs.py)
@@ -189,7 +192,7 @@ bots (PLT-5).
 - Everyone: `/ask`, `/summarize`, `/volio`, `/mondo`, `/echoes`, `/event`,
   `/mission`, `/place`, `/vote`, `/signalement`, `/normes`, `/modele`,
   `/forgetme`, `/identite`, `/thread`, `/sondage`, `/son`
-- Admin: `/model`, `/reindex`, `/norm-set`, `/health`, `/say`
+- Admin: `/model`, `/reindex`, `/web-source`, `/norm-set`, `/health`, `/say`
 
 **Model selection:** `/modele` lets each trammer choose a locally-installed chat
 model for their own conversations (autocomplete, embedding model filtered out,
@@ -213,7 +216,7 @@ returns "does not support tools". `/modele` warns the user in that case.
 | Direct fallback | `responder.py` | Single-turn responder if agent fails to load |
 | LangGraph agent | `agent/graph.py` | React agent, checkpointer, tool-call cap, turn logging |
 | Agent tools | `agent/tools.py`, `service_tools.py`, `community_tools.py` | Knowledge search + service wrappers |
-| RAG ingest | `rag/ingest.py` | PDF/Markdown → Chroma `docs`; messages → `history` |
+| RAG ingest | `rag/ingest.py`, `rag/web_ingest.py` | PDF/Markdown → `docs`; messages → `history`; curated URLs → `web` |
 | RAG retrieval | `rag/retriever.py`, `embeddings.py` | Vector search via Ollama embeddings |
 | RAG privacy | `rag/privacy.py` | Delete user history embeddings on `/forgetme` |
 | Guardrails | `guardrails.py` | Strip `@everyone`/`@here`; feminine fixes; link allowlist |
@@ -226,7 +229,7 @@ Optional Ollama Modelfile: `prompts/tramice721_modelfile`.
 |---------|------|-------------|
 | Identity | `identity.py` | Trammers, volios, confidences, aliases, identity links |
 | Memory | `memory.py` | Logging facade, extended `/forgetme` (trace + model pref) |
-| Knowledge | `knowledge.py` | RAG search, reindex |
+| Knowledge | `knowledge.py` | RAG search (docs+web), reindex scopes, web source registry |
 | Matchmaking | `matchmaking.py` | Synergies, Échos (propose-only) |
 | Coordination | `coordination.py` | Events, RSVPs, teams |
 | Ecosystem | `ecosystem.py` | Mondo perso/cosmo listings |
@@ -240,11 +243,11 @@ Not present as a separate module: `services/platform.py` (logic lives in `bot/`)
 
 | Store | File | Purpose |
 |-------|------|---------|
-| `app.sqlite` | `db.py` | Trammers, volios, entities, game, governance, aliases, activity traces, model prefs |
+| `app.sqlite` | `db.py` | Trammers, volios, entities, game, governance, aliases, activity traces, model prefs, **web_sources** |
 | `history.sqlite` | `history.py` | Message log with soft-delete |
 | `checkpoints.sqlite` | LangGraph | Per-thread agent memory |
 | Checkpoint cleanup | `checkpoints.py` | Delete threads on `/forgetme` |
-| Chroma | `data/chroma/` | `docs` and `history` collections |
+| Chroma | `data/chroma/` | `docs`, `history`, and `web` collections |
 
 Schemas match [`specifications.md`](specifications.md) §4.
 
@@ -253,7 +256,7 @@ Schemas match [`specifications.md`](specifications.md) §4.
 | Server | Transport | Tools |
 |--------|-----------|-------|
 | `discord_helper` | stdio | Server overview, channel history from SQLite |
-| `rag_server` | stdio | Semantic search over Chroma |
+| `rag_server` | stdio | Semantic search over Chroma (`docs`, `web`, `history`, `all`) |
 | Optional fetch | stdio (`uvx`) | Gated by `features.web_fetch` (default off) |
 
 Wired via `mcp_config.py` → `MultiServerMCPClient`; failures are non-fatal.
@@ -266,6 +269,7 @@ All jobs run in `America/Montreal` (configurable):
 |-----|----------|--------|
 | `index_new_messages` | Daily 02:00 | Implemented |
 | `refresh_knowledge_base` | Sunday 03:00 | Implemented |
+| `refresh_web_sources` | Sunday 03:30 | Implemented (active `web_sources` registry) |
 | `build_daily_summary` | Daily 08:00 | Implemented (needs `summary_channel_id`) |
 | `game_week_open` | Thursday 17:00 | Implemented |
 | `game_week_close` | Sunday 23:59 | Implemented |
@@ -297,8 +301,10 @@ Set `LOG_JSON=1` for structured JSON logs in production.
 | `test_checkpoints.py` | Thread deletion on forget |
 | `test_post_mvp.py` | Activity traces, aliases, moderation, capabilities |
 | `test_discord_errors.py` | Discord error classification, runtime health |
+| `test_web_ingest.py` | URL validation, SSRF guards, domain crawl rules |
+| `test_knowledge_web.py` | Web source registry, scoped reindex, search collections |
 
-Run: `pip install -r requirements-dev.txt && PYTHONPATH=. pytest tests/ -q`
+Run: `pip install -r requirements-dev.txt && PYTHONPATH=. pytest tests/ -q` (38 tests)
 
 ---
 
@@ -320,7 +326,8 @@ needing operator decisions — not blockers for a controlled first playtest.
 | Soundboard playback | Partial | `/son` lists sounds; voice playback not wired |
 | Proactive DMs to members | Not implemented | PLT-4; only reactive DMs and admin escalation today |
 | `@everyone` announcements | Not implemented | Config flag exists; no send path |
-| Web fetch MCP | Config only | `features.web_fetch: false`; requires `uvx mcp-server-fetch` |
+| Web fetch MCP (live) | Config only | `features.web_fetch: false`; optional runtime fetch via `uvx mcp-server-fetch` |
+| Admin-curated web RAG | **Done** | `/web-source`, Chroma `web` collection, `refresh_web_sources` job |
 | Output data-classification | Partial | Link allowlist + feminine fixes; no requester/owner checks on private data |
 | Tool result size cap (8 KB) | Not implemented | Spec §10.3 |
 | Multi-server / sharding | Out of scope | Single guild playtest |
@@ -340,7 +347,7 @@ needing operator decisions — not blockers for a controlled first playtest.
 5. **Data:** `python -m storage.db` and `python -m ai.rag.ingest`.
 6. **Notice:** post [`ai_logging_notice.md`](ai_logging_notice.md) in the server.
 7. **Verify:** `pytest tests/ -q` then `python -m bot.main`.
-8. **Smoke in Discord:** `/ask`, DM, `/health`, `/forgetme` on a test account.
+8. **Smoke in Discord:** `/ask`, DM, `/health`, `/web-source list`, `/forgetme` on a test account.
 
 ---
 

@@ -40,7 +40,13 @@ rate_limit:
 rag:
   chunk_size: 800
   chunk_overlap: 120
-  collections: [docs, history]
+  collections: [docs, history, web]
+  web:
+    max_depth: 2
+    max_pages: 25
+    fetch_timeout_sec: 15
+    require_allowlist: false
+    user_agent: "Tramice721-RAG/1.0"
 
 privacy:
   dm_always_private: true

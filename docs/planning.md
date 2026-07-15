@@ -79,7 +79,7 @@ spec sections where possible.
 | Tool result size cap (8 KB) | spec §10.3 | Not enforced | Truncate tool returns in agent layer |
 | Soundboard playback | post-MVP | `/son` lists sounds; no voice playback | Wire playback when voice connect is added |
 | `@everyone` announcements | PLT-4, ADM-4 | Capability tracked in scan; no send path | Gated helper for game-week posts if needed |
-| Web / LaTramice.net RAG | KNW-3, requirements TODO | `features.web_fetch: false` | Enable fetch MCP + scheduled web ingest |
+| Web / LaTramice.net RAG | KNW-3 | **Done** | `/web-source`, Chroma `web`, scheduled `refresh_web_sources` |
 | Browser-search MCP | requirements §3.3 TODO | Not started | Evaluate after web fetch |
 | Social-norm enforcement in code | GOV-12, requirements TODO | Norms stored and shown; partial policy in handlers | Central policy module used by RAG, summaries, profiles |
 | Trust capital / parrainage UX | IDN-4, IDN-5 | Schema + service fields; limited slash exposure | Agent tools + `/volio` extensions if playtest needs them |
@@ -159,6 +159,7 @@ flowchart LR
 |-------|-------------------|---------------|
 | Agent reply | `/ask`, `!ai`, DM | In-character French reply |
 | RAG grounding | Question about HOP / weekly cycle | Answer cites doc sources |
+| Web RAG | `/web-source add` then `/ask` on site topic | Answer cites ingested web source |
 | Admin health | `/health` | Ollama, SQLite, Chroma, jobs reported |
 | Privacy | `/forgetme` on test account | Messages, profile, checkpoints cleared |
 | Rate limit | Rapid prefix messages | Cooldown message shown |
@@ -208,8 +209,8 @@ flowchart LR
 
 | Work item | Req / spec | Deliverable |
 |-----------|------------|-------------|
-| LaTramice.net fetch + ingest | KNW-3, knowledge TODO | `features.web_fetch: true`; `web` Chroma collection; admin docs |
-| Scheduled web refresh | ADM-2 | Job or manual `/reindex` extension for web collection |
+| LaTramice.net fetch + ingest | KNW-3 | **Done** | Admin `/web-source`, Chroma `web`, SSRF-safe crawl |
+| Scheduled web refresh | ADM-2 | **Done** | `refresh_web_sources` job + `/reindex scope:web` |
 | Échos notification DMs | PLT-4 (optional) | Opt-in DM when synergy found; never auto-connect |
 | Soundboard voice playback | post-MVP | List via `/son`; playback deferred | Connect to voice + play sound |
 | `@everyone` for game week | PLT-4, ADM-4 | Gated by `everyone_announcements` + admin role |

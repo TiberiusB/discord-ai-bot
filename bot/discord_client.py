@@ -92,7 +92,15 @@ class TramiceBot(commands.Bot):
     async def _deliver(self, req: AgentRequest, text: str) -> None:
         from ai.guardrails import postprocess_output
 
-        text = postprocess_output(text, self.settings, self.settings.locale_default)
+        extra_hosts: set[str] = set()
+        if self.services and self.services.knowledge is not None:
+            extra_hosts.update(self.services.knowledge.web_source_domains())
+        text = postprocess_output(
+            text,
+            self.settings,
+            self.settings.locale_default,
+            extra_link_hosts=extra_hosts,
+        )
         chunks = split_message(text)
         try:
             if req.reply is not None:

@@ -156,6 +156,7 @@ discord-ai-bot/
 │   │   └── tools.py         # LangChain tools wrapping services
 │   └── rag/
 │       ├── ingest.py
+│       ├── web_ingest.py    # admin-curated same-domain crawl → Chroma `web`
 │       ├── retriever.py
 │       └── embeddings.py
 ├── mcp_servers/
@@ -277,7 +278,7 @@ Must embed:
 **Response post-checks (M6):**
 
 - French self-reference uses feminine forms when `locale=fr`.
-- Strip fabricated URLs; validate links against allowlist (`latramice.net`, discord CDN).
+- Strip fabricated URLs; validate links against allowlist (`fetch_allowlist`, discord CDN, and **domains of active curated web sources** from `web_sources`).
 
 ---
 
@@ -579,6 +580,23 @@ CREATE TABLE user_model_prefs (
     model             TEXT NOT NULL,
     updated_at        TEXT NOT NULL
 );
+
+-- Curated web sources (admin `/web-source`; shallow same-domain crawl → Chroma `web`)
+CREATE TABLE web_sources (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    seed_url         TEXT NOT NULL UNIQUE,
+    domain           TEXT NOT NULL,
+    label            TEXT,
+    max_depth        INTEGER NOT NULL DEFAULT 2,
+    max_pages        INTEGER NOT NULL DEFAULT 25,
+    added_by         TEXT NOT NULL,
+    added_at         TEXT NOT NULL,
+    last_indexed_at  TEXT,
+    last_page_count  INTEGER DEFAULT 0,
+    last_chunk_count INTEGER DEFAULT 0,
+    last_error       TEXT,
+    active           INTEGER NOT NULL DEFAULT 1
+);
 ```
 
 
@@ -590,11 +608,13 @@ Managed by `langgraph-checkpoint-sqlite`; no manual schema in spec.
 ### 4.4 Chroma collections `[knowledge]` `[community-memory]`
 
 
-| Collection           | Source                                         | Chunk strategy                                              |
-| -------------------- | ---------------------------------------------- | ----------------------------------------------------------- |
-| `docs`               | `docs/*.pdf`, `docs/*.md`                      | 800 tokens, 120 overlap; metadata: `source`, `page`         |
-| `history`            | `messages` where `deleted=0` and policy allows | 400 tokens; metadata: `channel_id`, `user_id`, `created_at` |
-| `web` (optional M4+) | LaTramice.net fetches                          | same as docs; `source_url` metadata                         |
+| Collection | Source | Chunk strategy |
+| ---------- | ------ | -------------- |
+| `docs` | `docs/*.pdf`, `docs/*.md`, `docs/*.txt` | 800 tokens, 120 overlap; metadata: `source`, `page` |
+| `history` | `messages` where `deleted=0` and policy allows | 400 tokens; metadata: `channel_id`, `user_id`, `created_at` |
+| `web` | Admin seed URLs (`web_sources` registry) | Same as `docs`; metadata: `seed_url`, `source_url`, `title`, `fetched_at`, `depth` |
+
+**Web ingest (`ai/rag/web_ingest.py`):** BFS crawl on the **same registrable domain** as the seed URL, up to `rag.web.max_depth` / `max_pages` (per-source overrides via `/web-source add`). HTML only (no JS rendering). SSRF guards block private/localhost targets. Registry in `app.sqlite`; vectors in Chroma `web`. Delete/reindex a source = drop chunks where `seed_url` matches, then re-crawl.
 
 
 ---
@@ -705,11 +725,17 @@ parties (`GOV-8`); seed logged for audit.
 ```python
 class KnowledgeService:
     def search(self, query: str, collections: list[str] | None = None,
-               k: int = 5) -> list[RetrievalChunk]: ...
+               k: int = 5) -> list[RetrievalChunk]: ...  # default: docs + web
     def explain_topic(self, topic: str) -> GroundedAnswer: ...
+    def reindex(self, scope: Literal["docs", "web", "all"] = "docs") -> dict: ...
+    def add_web_source(self, url: str, added_by: str, *, label: str | None = None,
+                       max_depth: int | None = None, max_pages: int | None = None) -> dict: ...
+    def list_web_sources(self) -> list[WebSource]: ...
+    def remove_web_source(self, url_or_id: str) -> dict: ...
+    def web_source_domains(self) -> list[str]: ...  # for output link allowlist
 ```
 
-Wraps `ai/rag/retriever.py`; every `GroundedAnswer` includes `sources[]`.
+Wraps `ai/rag/retriever.py` and `ai/rag/web_ingest.py`; every `GroundedAnswer` includes `sources[]`. Agent `search_knowledge` queries **`docs` + `web`** (not `history` unless explicitly requested).
 
 ### 5.8 MemoryService `[community-memory]`
 
@@ -774,16 +800,17 @@ Transport: **stdio**. Launch via `mcp_servers/mcp_config.py`.
 
 ```python
 @mcp.tool()
-def semantic_search(query: str, collection: str = "docs", k: int = 5) -> list[dict]:
-    """Vector search over Chroma; returns text + metadata + score."""
+def semantic_search_docs(query: str, collection: str = "docs", k: int = 5) -> list[dict]:
+    """Vector search over Chroma. collection: docs | web | history | all (docs+web)."""
 ```
 
 
 
-### 6.4 MCP: fetch/filesystem (optional M4+) `[knowledge]`
+### 6.4 MCP: fetch (optional, live) vs curated web RAG `[knowledge]`
 
-Read-only `uvx mcp-server-fetch` scoped to `latramice.net`. No arbitrary URLs
-in v1 unless admin adds to `config.yaml: fetch_allowlist`.
+**Curated web RAG (implemented):** admins register seed URLs via `/web-source add`; the bot crawls and embeds into Chroma `web`. This is the primary path for LaTramice.net and other trusted sites (KNW-3).
+
+**Optional live fetch (not enabled by default):** read-only `uvx mcp-server-fetch` when `features.web_fetch: true`. Gated by `fetch_allowlist` if `rag.web.require_allowlist: true`. Separate from curated ingest — do not enable both for the same use case unless intentional.
 
 ---
 
@@ -849,7 +876,8 @@ Config key: `triggers.prefix` default `!ai`.
 | `/thread`      | platform       | all    | Create a channel thread                      |
 | `/sondage`     | platform       | all    | Publish a Discord poll                       |
 | `/son`         | platform       | all    | List soundboard sounds                       |
-| `/reindex`     | administration | admin  | Rebuild Chroma index                         |
+| `/reindex`     | administration | admin  | Rebuild RAG index (`scope`: docs, web, or all) |
+| `/web-source`  | administration | admin  | **Group:** `add` / `list` / `remove` curated web sources |
 | `/model`       | administration | admin  | Swap community default Ollama model          |
 | `/norm-set`    | governance     | admin  | Update a social norm                         |
 | `/health`      | administration | admin  | Runtime + Discord health snapshot            |
@@ -882,6 +910,7 @@ Discord embed + `✅ Confirmer` / `❌ Annuler` buttons (`discord.ui.View`).
 | ------------------------ | --------------- | ------------------------------------------- |
 | `index_new_messages`     | `0 2 * * *`     | Embed unindexed messages → Chroma `history` |
 | `refresh_knowledge_base` | `0 3 * * 0`     | Re-ingest `docs/` if changed                |
+| `refresh_web_sources`    | `30 3 * * 0`    | Re-crawl all active `web_sources` → Chroma `web` |
 | `build_daily_summary`    | `0 8 * * *`     | Post summary to `summary_channel_id`        |
 | `game_week_open`         | `0 17 * * 4`    | Open investment window; announce budgets; optional Discord event |
 | `game_week_close`        | `59 23 * * 0`   | Close window; finalize allocations          |
@@ -949,7 +978,13 @@ rate_limit:
 rag:
   chunk_size: 800
   chunk_overlap: 120
-  collections: [docs, history]
+  collections: [docs, history, web]
+  web:
+    max_depth: 2
+    max_pages: 25
+    fetch_timeout_sec: 15
+    require_allowlist: false   # true = seed domain must match fetch_allowlist
+    user_agent: "Tramice721-RAG/1.0"
 
 privacy:
   dm_always_private: true
@@ -989,12 +1024,13 @@ fetch_allowlist:
 ### 10.1 Access control
 
 
-| Action          | Check                                                 |
-| --------------- | ----------------------------------------------------- |
-| Admin commands  | `user` has role in `ADMIN_ROLE_IDS` or is guild owner |
-| Channel logging | `log_mode` + allow/deny lists                         |
-| Tool mutations  | confirmation UI + audit row in SQLite                 |
-| `/forgetme`     | only requesting user's data                           |
+| Action            | Check                                                 |
+| ----------------- | ----------------------------------------------------- |
+| Admin commands    | `user` has role in `ADMIN_ROLE_IDS` or is guild owner |
+| `/web-source add` | admin only; SSRF validation on seed URL                |
+| Channel logging   | `log_mode` + allow/deny lists                         |
+| Tool mutations    | confirmation UI + audit row in SQLite                 |
+| `/forgetme`       | only requesting user's data                           |
 
 
 
@@ -1015,6 +1051,7 @@ fetch_allowlist:
 ### 10.3 Input/output sanitization (M6)
 
 - Strip `@everyone` / `@here` from user input to agent.
+- Web crawl (`/web-source add`): http(s) only; DNS resolved to public IPs; optional `rag.web.require_allowlist`.
 - Max tool-result size 8 KB per call (truncate with pointer).
 - Block output of other users' `private` data unless requester is owner or admin.
 
@@ -1094,7 +1131,8 @@ Structured JSON to stdout (M6): `level`, `event`, `guild_id`, `channel_id`,
 
 - [x] `docs/jeu.pdf` + `requirements.md` ingested into Chroma
 - [x] `/ask` about HOP / weekly cycle returns grounded answer with source hint
-- [x] `/reindex` rebuilds index
+- [x] `/reindex` rebuilds index (scoped: docs, web, or all)
+- [x] Admin-curated web RAG: `/web-source`, Chroma `web`, `refresh_web_sources`
 
 
 

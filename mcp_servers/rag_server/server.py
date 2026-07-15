@@ -19,14 +19,24 @@ mcp = FastMCP("rag_server")
 _settings = load_settings()
 
 
-@mcp.tool()
-def semantic_search_docs(query: str, collection: str = "docs", k: int = 5) -> list[dict]:
-    """Recherche vectorielle dans les documents du projet (jeu, règles, HOP)."""
-    chunks = semantic_search(_settings, query, collection=collection, k=k)
+def _search(query: str, collection: str, k: int) -> list[dict]:
+    if collection == "all":
+        chunks = semantic_search(_settings, query, "docs", k=k)
+        web_chunks = semantic_search(_settings, query, "web", k=k)
+        merged = sorted(chunks + web_chunks, key=lambda c: c.score, reverse=True)
+        chunks = merged[:k]
+    else:
+        chunks = semantic_search(_settings, query, collection=collection, k=k)
     return [
         {"text": c.text, "source": c.source, "score": c.score, "metadata": c.metadata}
         for c in chunks
     ]
+
+
+@mcp.tool()
+def semantic_search_docs(query: str, collection: str = "docs", k: int = 5) -> list[dict]:
+    """Recherche vectorielle (docs, web, history, ou all pour docs+web)."""
+    return _search(query, collection, k)
 
 
 if __name__ == "__main__":

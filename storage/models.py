@@ -169,3 +169,20 @@ class Summary:
     body: str
     message_count: int = 0
     period: str | None = None
+
+
+@dataclass
+class WebSource:
+    id: int
+    seed_url: str
+    domain: str
+    label: str | None = None
+    max_depth: int = 2
+    max_pages: int = 25
+    added_by: str = ""
+    added_at: str | None = None
+    last_indexed_at: str | None = None
+    last_page_count: int = 0
+    last_chunk_count: int = 0
+    last_error: str | None = None
+    active: bool = True

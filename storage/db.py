@@ -272,6 +272,23 @@ CREATE TABLE IF NOT EXISTS user_model_prefs (
     model             TEXT NOT NULL,
     updated_at        TEXT NOT NULL
 );
+
+-- Curated web sources for RAG (admin-managed, shallow same-domain crawl)
+CREATE TABLE IF NOT EXISTS web_sources (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    seed_url         TEXT NOT NULL UNIQUE,
+    domain           TEXT NOT NULL,
+    label            TEXT,
+    max_depth        INTEGER NOT NULL DEFAULT 2,
+    max_pages        INTEGER NOT NULL DEFAULT 25,
+    added_by         TEXT NOT NULL,
+    added_at         TEXT NOT NULL,
+    last_indexed_at  TEXT,
+    last_page_count  INTEGER DEFAULT 0,
+    last_chunk_count INTEGER DEFAULT 0,
+    last_error       TEXT,
+    active           INTEGER NOT NULL DEFAULT 1
+);
 """
 
 
@@ -346,6 +363,79 @@ class Database:
             "DELETE FROM user_model_prefs WHERE discord_user_id = ?",
             (user_id,),
         ).rowcount
+
+    # ---- curated web sources (RAG) ------------------------------------
+    def list_web_sources(self, active_only: bool = True) -> list[sqlite3.Row]:
+        if active_only:
+            return self.query_app(
+                "SELECT * FROM web_sources WHERE active = 1 ORDER BY id"
+            )
+        return self.query_app("SELECT * FROM web_sources ORDER BY id")
+
+    def get_web_source(self, source_id: int) -> sqlite3.Row | None:
+        return self.query_app_one(
+            "SELECT * FROM web_sources WHERE id = ?",
+            (source_id,),
+        )
+
+    def get_web_source_by_url(self, seed_url: str) -> sqlite3.Row | None:
+        return self.query_app_one(
+            "SELECT * FROM web_sources WHERE seed_url = ?",
+            (seed_url,),
+        )
+
+    def upsert_web_source(
+        self,
+        *,
+        seed_url: str,
+        domain: str,
+        added_by: str,
+        label: str | None = None,
+        max_depth: int = 2,
+        max_pages: int = 25,
+    ) -> int:
+        now = utcnow()
+        self.execute_app(
+            "INSERT INTO web_sources("
+            "seed_url, domain, label, max_depth, max_pages, added_by, added_at, active"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, 1) "
+            "ON CONFLICT(seed_url) DO UPDATE SET "
+            "domain = excluded.domain, "
+            "label = COALESCE(excluded.label, web_sources.label), "
+            "max_depth = excluded.max_depth, "
+            "max_pages = excluded.max_pages, "
+            "active = 1",
+            (seed_url, domain, label, max_depth, max_pages, added_by, now),
+        )
+        row = self.get_web_source_by_url(seed_url)
+        return int(row["id"]) if row else 0
+
+    def update_web_source_index_status(
+        self,
+        source_id: int,
+        *,
+        last_indexed_at: str | None = None,
+        last_page_count: int = 0,
+        last_chunk_count: int = 0,
+        last_error: str | None = None,
+    ) -> None:
+        self.execute_app(
+            "UPDATE web_sources SET "
+            "last_indexed_at = ?, last_page_count = ?, last_chunk_count = ?, "
+            "last_error = ? WHERE id = ?",
+            (last_indexed_at, last_page_count, last_chunk_count, last_error, source_id),
+        )
+
+    def delete_web_source(self, source_id: int) -> bool:
+        cur = self.execute_app("DELETE FROM web_sources WHERE id = ?", (source_id,))
+        return cur.rowcount > 0
+
+    def delete_web_source_by_url(self, seed_url: str) -> bool:
+        cur = self.execute_app(
+            "DELETE FROM web_sources WHERE seed_url = ?",
+            (seed_url,),
+        )
+        return cur.rowcount > 0
 
     # ---- generic helpers ----------------------------------------------
     def execute_app(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:

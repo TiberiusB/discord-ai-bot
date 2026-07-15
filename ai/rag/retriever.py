@@ -23,7 +23,12 @@ def semantic_search(
     chunks: list[RetrievalChunk] = []
     for doc, score in results:
         meta = dict(doc.metadata or {})
-        source = meta.get("source") or meta.get("channel_id") or collection
+        source = (
+            meta.get("source_url")
+            or meta.get("source")
+            or meta.get("channel_id")
+            or collection
+        )
         chunks.append(
             RetrievalChunk(
                 text=doc.page_content,

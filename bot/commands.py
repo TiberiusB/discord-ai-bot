@@ -38,6 +38,55 @@ _MODEL_CAUTION = (
 
 _RESET_ALIASES = {"defaut", "défaut", "default", "auto", "reset", "0"}
 
+REINDEX_SCOPE_CHOICES = [
+    app_commands.Choice(name="Documents locaux (docs/)", value="docs"),
+    app_commands.Choice(name="Sources web curatées", value="web"),
+    app_commands.Choice(name="Documents + web", value="all"),
+]
+
+
+def _format_reindex_result(result: dict) -> str:
+    scope = result.get("scope", "docs")
+    lines = [f"Index reconstruit (scope : **{scope}**). 📚"]
+    if "docs" in result:
+        docs = result["docs"]
+        lines.append(
+            f"- **docs** : {docs['documents']} documents, {docs['chunks']} fragments"
+        )
+    if "web" in result:
+        web = result["web"]
+        lines.append(
+            f"- **web** : {web['sources']} source(s), {web['total_pages']} page(s), "
+            f"{web['total_chunks']} fragment(s)"
+        )
+        if web.get("errors"):
+            lines.append("- **erreurs** :")
+            for err in web["errors"][:5]:
+                lines.append(f"  - {err[:200]}")
+    return "\n".join(lines)
+
+
+def _format_web_sources_list(sources) -> str:
+    if not sources:
+        return "Aucune source web curatée pour l'instant."
+    lines = ["**Sources web indexées** :\n"]
+    for src in sources:
+        label = src.label or src.seed_url
+        status = (
+            f"{src.last_page_count} page(s), {src.last_chunk_count} fragment(s)"
+            if src.last_indexed_at
+            else "pas encore indexée"
+        )
+        indexed = src.last_indexed_at or "—"
+        err = f"\n  ⚠️ {src.last_error[:150]}" if src.last_error else ""
+        lines.append(
+            f"**#{src.id}** — {label}\n"
+            f"  URL : {src.seed_url}\n"
+            f"  Domaine : {src.domain} | profondeur {src.max_depth} | max {src.max_pages} pages\n"
+            f"  Indexé : {indexed} | {status}{err}"
+        )
+    return "\n".join(lines)
+
 
 def _is_embed_model(name: str, embed_model: str) -> bool:
     base = name.split(":", 1)[0]
@@ -245,9 +294,17 @@ def register_commands(bot) -> None:
             await interaction.followup.send(f"Échec TTS : {exc}", ephemeral=True)
 
     @tree.command(
-        name="reindex", description="[Admin] Reconstruire l'index documentaire (RAG)."
+        name="reindex",
+        description="[Admin] Reconstruire l'index RAG (documents locaux et/ou web).",
     )
-    async def reindex(interaction: discord.Interaction):
+    @app_commands.describe(
+        scope="Quoi réindexer : docs locaux, sources web, ou les deux"
+    )
+    @app_commands.choices(scope=REINDEX_SCOPE_CHOICES)
+    async def reindex(
+        interaction: discord.Interaction,
+        scope: app_commands.Choice[str] | None = None,
+    ):
         if not bot.is_admin(interaction):
             await interaction.response.send_message(PERM_DENIED, ephemeral=True)
             return
@@ -256,8 +313,11 @@ def register_commands(bot) -> None:
         if services is None or services.knowledge is None:
             await interaction.followup.send("Le service de connaissances n'est pas prêt.")
             return
+        selected = scope.value if scope else "docs"
         try:
-            result = await bot.loop.run_in_executor(None, services.knowledge.reindex)
+            result = await bot.loop.run_in_executor(
+                None, lambda: services.knowledge.reindex(selected)
+            )
         except Exception as exc:  # noqa: BLE001
             await interaction.followup.send(
                 "L'indexation a échoué. Vérifie qu'Ollama tourne et que le modèle "
@@ -265,11 +325,140 @@ def register_commands(bot) -> None:
                 f"Détail : {exc}"
             )
             return
-        audit(str(interaction.user.id), "reindex", result="ok")
-        await interaction.followup.send(
-            f"Index reconstruit : {result['documents']} documents, "
-            f"{result['chunks']} fragments dans la collection « {result['collection']} ». 📚"
+        audit(
+            str(interaction.user.id),
+            "reindex",
+            args={"scope": selected},
+            result="ok",
         )
+        await interaction.followup.send(_format_reindex_result(result))
+
+    web_source = app_commands.Group(
+        name="web-source",
+        description="[Admin] Gérer les sources web curatées pour la mémoire RAG.",
+    )
+
+    @web_source.command(
+        name="add",
+        description="[Admin] Ajouter et indexer une source web (crawl même domaine).",
+    )
+    @app_commands.describe(
+        url="URL de départ (page d'accueil ou page cible)",
+        label="Nom lisible pour les curateurs (facultatif)",
+        max_depth="Profondeur de crawl (défaut : config rag.web.max_depth)",
+        max_pages="Nombre max de pages (défaut : config rag.web.max_pages)",
+    )
+    async def web_source_add(
+        interaction: discord.Interaction,
+        url: str,
+        label: str | None = None,
+        max_depth: app_commands.Range[int, 0, 5] | None = None,
+        max_pages: app_commands.Range[int, 1, 100] | None = None,
+    ):
+        if not bot.is_admin(interaction):
+            await interaction.response.send_message(PERM_DENIED, ephemeral=True)
+            return
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        services = bot.services
+        if services is None or services.knowledge is None:
+            await interaction.followup.send("Le service de connaissances n'est pas prêt.")
+            return
+        from ai.rag.web_ingest import WebIngestError
+
+        try:
+            result = await bot.loop.run_in_executor(
+                None,
+                lambda: services.knowledge.add_web_source(
+                    url,
+                    str(interaction.user.id),
+                    label=label,
+                    max_depth=max_depth,
+                    max_pages=max_pages,
+                ),
+            )
+        except WebIngestError as exc:
+            await interaction.followup.send(f"Source web refusée : {exc}")
+            return
+        except Exception as exc:  # noqa: BLE001
+            await interaction.followup.send(
+                "L'indexation web a échoué. Vérifie qu'Ollama tourne.\n"
+                f"Détail : {exc}"
+            )
+            return
+        audit(
+            str(interaction.user.id),
+            "web_source_add",
+            args={"url": result["seed_url"], "label": label},
+            result="ok",
+        )
+        display = label or result["seed_url"]
+        await interaction.followup.send(
+            f"Source web **{display}** indexée. 🌐\n"
+            f"- URL : {result['seed_url']}\n"
+            f"- Domaine : {result['domain']}\n"
+            f"- {result['pages']} page(s), {result['chunks']} fragment(s) dans la collection « web »."
+        )
+
+    @web_source.command(
+        name="list",
+        description="[Admin] Lister les sources web curatées et leur statut d'indexation.",
+    )
+    async def web_source_list(interaction: discord.Interaction):
+        if not bot.is_admin(interaction):
+            await interaction.response.send_message(PERM_DENIED, ephemeral=True)
+            return
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        services = bot.services
+        if services is None or services.knowledge is None:
+            await interaction.followup.send("Le service de connaissances n'est pas prêt.")
+            return
+        sources = services.knowledge.list_web_sources()
+        text = _format_web_sources_list(sources)
+        if len(text) > 1900:
+            text = text[:1900] + "\n… (liste tronquée)"
+        await interaction.followup.send(text)
+
+    @web_source.command(
+        name="remove",
+        description="[Admin] Retirer une source web et supprimer ses fragments RAG.",
+    )
+    @app_commands.describe(
+        url_or_id="URL seed enregistrée ou identifiant (#id de /web-source list)"
+    )
+    async def web_source_remove(interaction: discord.Interaction, url_or_id: str):
+        if not bot.is_admin(interaction):
+            await interaction.response.send_message(PERM_DENIED, ephemeral=True)
+            return
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        services = bot.services
+        if services is None or services.knowledge is None:
+            await interaction.followup.send("Le service de connaissances n'est pas prêt.")
+            return
+        from ai.rag.web_ingest import WebIngestError
+
+        try:
+            result = await bot.loop.run_in_executor(
+                None,
+                lambda: services.knowledge.remove_web_source(url_or_id.strip()),
+            )
+        except WebIngestError as exc:
+            await interaction.followup.send(str(exc))
+            return
+        except Exception as exc:  # noqa: BLE001
+            await interaction.followup.send(f"Échec de suppression : {exc}")
+            return
+        audit(
+            str(interaction.user.id),
+            "web_source_remove",
+            args={"seed_url": result["seed_url"]},
+            result="ok",
+        )
+        await interaction.followup.send(
+            f"Source **#{result['id']}** retirée ({result['seed_url']}). "
+            f"{result['chunks_deleted']} fragment(s) supprimé(s) de Chroma."
+        )
+
+    tree.add_command(web_source)
 
     @tree.command(name="health", description="[Admin] État de santé de la tramice.")
     async def health(interaction: discord.Interaction):
@@ -433,7 +622,7 @@ def register_commands(bot) -> None:
     if bot.settings.get("features.game_simulation", True):
         register_m5_commands(bot)
     log.info(
-        "Registered slash commands: /ask, /forgetme, /reindex, /model, /modele, "
+        "Registered slash commands: /ask, /forgetme, /reindex, /web-source, /model, /modele, "
         "/health, /say, /volio, /mondo, /echoes, /event, /summarize, /normes, "
         "/norm-set, /signalement, /identite, /thread, /sondage, /son, "
         "/mission, /place, /vote"

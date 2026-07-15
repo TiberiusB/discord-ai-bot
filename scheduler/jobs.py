@@ -14,6 +14,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from ai.rag.ingest import ingest_docs, ingest_history_rows
+from ai.rag.web_ingest import ingest_all_web_sources
 from bot.observability import log_job
 
 log = logging.getLogger("tramice.scheduler")
@@ -66,6 +67,32 @@ def build_scheduler(bot) -> AsyncIOScheduler:
         result = ingest_docs(settings, reset=True)
         fields["chunks"] = result.chunks
         log.info("job:refresh_knowledge_base %d chunks", result.chunks)
+
+    async def refresh_web_sources(fields: dict) -> None:
+        log.info("job:refresh_web_sources start")
+        collections = settings.get("rag.collections", ["docs", "history"])
+        if "web" not in collections:
+            fields["skipped"] = True
+            log.info("job:refresh_web_sources skipped (web collection disabled)")
+            return
+        if services is None or services.knowledge is None or bot.db is None:
+            fields["skipped"] = True
+            return
+        rows = bot.db.list_web_sources(active_only=True)
+        if not rows:
+            fields["sources"] = 0
+            log.info("job:refresh_web_sources nothing to refresh")
+            return
+        result = ingest_all_web_sources(settings, bot.db)
+        fields["sources"] = result["sources"]
+        fields["total_pages"] = result["total_pages"]
+        fields["total_chunks"] = result["total_chunks"]
+        fields["errors"] = len(result.get("errors") or [])
+        log.info(
+            "job:refresh_web_sources refreshed %d source(s), %d chunks",
+            result["sources"],
+            result["total_chunks"],
+        )
 
     async def build_daily_summary(fields: dict) -> None:
         log.info("job:build_daily_summary start")
@@ -149,6 +176,11 @@ def build_scheduler(bot) -> AsyncIOScheduler:
         _wrap_job("refresh_knowledge_base", refresh_knowledge_base),
         CronTrigger(day_of_week="sun", hour=3, minute=0, timezone=tz),
         id="refresh_knowledge_base",
+    )
+    scheduler.add_job(
+        _wrap_job("refresh_web_sources", refresh_web_sources),
+        CronTrigger(day_of_week="sun", hour=3, minute=30, timezone=tz),
+        id="refresh_web_sources",
     )
     scheduler.add_job(
         _wrap_job("build_daily_summary", build_daily_summary),

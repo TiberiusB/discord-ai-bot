@@ -48,7 +48,7 @@ def build_services(settings, db: Database, history: HistoryStore) -> Services:
     try:
         from services.knowledge import KnowledgeService
 
-        services.knowledge = KnowledgeService(settings)
+        services.knowledge = KnowledgeService(settings, db)
     except ImportError:
         pass
 
