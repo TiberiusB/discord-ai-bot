@@ -54,6 +54,7 @@ and not multi-server sync (all explicitly out of scope for v1).
 | [`docs/specifications.md`](docs/specifications.md) | How it is built |
 | [`docs/implementation_status.md`](docs/implementation_status.md) | What is built today |
 | [`docs/planning.md`](docs/planning.md) | Gaps and next development phases |
+| [`docs/post_mvp.md`](docs/post_mvp.md) | Post-MVP features (capabilities, identity, platform actions) |
 
 
 **Status:** Application code for milestones M0–M6 is in place; pre-Discord
@@ -234,17 +235,22 @@ message when rate-limited; slash commands bypass user cooldown.
 | `/vote` | List, open, or cast votes (with confirmation) |
 | `/signalement` | File a graduated report (confidential) |
 | `/normes` | Show current social norms |
-| `/modele` | Choose your personal chat model (affects only your own conversations) |
-| `/forgetme` | Delete your stored messages, profile, checkpoints, and RAG fragments |
+| `/modele` | Choose your personal chat model (dropdown or autocomplete) |
+| `/forgetme` | Delete your stored data; retains a minimal activity trace (see [Privacy](#privacy-and-data)) |
+| `/identite` | List known display names or link two member identities |
+| `/thread` | Create a discussion thread in the current channel |
+| `/sondage` | Publish a 24-hour Discord poll (2–4 options) |
+| `/son` | List server soundboard sounds (playback not yet automated) |
 
 ### Admin
 
 | Command | Description |
 |---------|-------------|
-| `/model` | Change the **default** Ollama model for the whole community (runtime; not persisted) |
+| `/model` | Change the **default** Ollama model (dropdown; runtime; not persisted) |
 | `/reindex` | Rebuild the Chroma document index |
 | `/norm-set` | Update a social norm |
-| `/health` | Report Ollama, SQLite, Chroma, and scheduler status |
+| `/health` | Ollama, SQLite, Chroma, scheduler, gateway, capability scan, error counters |
+| `/say` | Send a TTS message in the current channel (`features.tts` must be enabled) |
 
 Mutations (`/place`, `/event` propose, `/vote` cast) show **✅ Confirmer /
 ❌ Annuler** buttons before anything is committed.
@@ -254,10 +260,12 @@ Mutations (`/place`, `/event` propose, `/vote` cast) show **✅ Confirmer /
 Any trammer can pick which locally-installed Ollama model answers **their own**
 conversations, without affecting anyone else:
 
-- `/modele` — show your current model and the list of installed chat models.
+- `/modele` — show your current model and a **dropdown** of installed chat models.
 - `/modele nom:<model>` — switch to a model (e.g. `gemma2:9b`). Must be installed
   in Ollama; the embedding model is filtered out of the choices.
 - `/modele nom:defaut` — clear your choice and fall back to the community default.
+
+`/model` (admin) uses the same dropdown pattern for the community default.
 
 The command replies **ephemerally** with a caution note: models differ in
 answer quality, speed, and tool-calling reliability (larger models like
@@ -300,6 +308,10 @@ features:
   game_simulation: true
   matchmaking: true
   web_fetch: false             # optional MCP fetch for latramice.net
+  tts: true                    # admin /say (requires SEND_TTS_MESSAGES)
+
+governance:
+  escalation_threshold: 3      # open signalements before admin DM on /signalement
 
 rate_limit:
   per_user_cooldown_sec: 10
@@ -330,10 +342,12 @@ All times are **America/Montreal** (configurable in `config.yaml`).
 | `index_new_messages` | Daily 02:00 | Embed new salon messages → Chroma `history` |
 | `refresh_knowledge_base` | Sunday 03:00 | Re-ingest `docs/` if changed |
 | `build_daily_summary` | Daily 08:00 | Post summary to `summary_channel_id` |
-| `game_week_open` | Thursday 17:00 | Open investment window; announce budgets |
+| `game_week_open` | Thursday 17:00 | Open investment window; announce budgets; optional Discord scheduled event |
 | `game_week_close` | Sunday 23:59 | Close window; finalize HOP allocations |
+| `capability_scan` | Daily 04:00 | Refresh `data/capabilities.json` and agent communication strategy |
 
-Requires `channels.summary_channel_id` for summary and game posts.
+Requires `channels.summary_channel_id` for summary and game posts. Discord
+scheduled events require `MANAGE_EVENTS` on the bot role.
 
 ---
 
@@ -341,7 +355,7 @@ Requires `channels.summary_channel_id` for summary and game posts.
 
 ```
 discord-ai-bot/
-├── bot/                 # Discord client, router, commands, observability
+├── bot/                 # Discord client, router, commands, capabilities, observability
 ├── services/            # Domain services (identity, game, governance, …)
 ├── ai/
 │   ├── agent/           # LangGraph react agent, tools, state
@@ -363,7 +377,7 @@ discord-ai-bot/
 └── deploy/tramice721.service
 ```
 
-Approximate size: **~5,100 lines** of Python application code.
+Approximate size: **~7,100 lines** of Python application code.
 
 ---
 
@@ -374,7 +388,13 @@ Approximate size: **~5,100 lines** of Python application code.
 - **DMs** and **confidences** are treated as private and excluded from public
   summaries and Cosmo views.
 - `/forgetme` soft-deletes messages and profile rows, removes LangGraph
-  checkpoints, and deletes Chroma `history` embeddings for that user.
+  checkpoints, and deletes Chroma `history` embeddings for that user. A minimal
+  **activity trace** (display name, activity span, message count) is retained in
+  `activity_traces` for audit — no message content is kept.
+- Display-name changes are tracked in `member_aliases`; use `/identite` to list
+  or link identities.
+- After repeated `/signalement` reports, admins may receive a **DM suggestion**
+  (never an automatic ban).
 - Post an **AI-logging notice** before going live —
   [`docs/ai_logging_notice.md`](docs/ai_logging_notice.md).
 - Use `channels.allowlist` to limit which salons are logged and where the bot acts.
@@ -444,6 +464,7 @@ Admin health: `/health` in Discord.
 | [`docs/specifications.md`](docs/specifications.md) | Schemas, APIs, acceptance criteria |
 | [`docs/implementation_status.md`](docs/implementation_status.md) | Built features and known gaps |
 | [`docs/planning.md`](docs/planning.md) | Phased roadmap (connect → playtest → hardening) |
+| [`docs/post_mvp.md`](docs/post_mvp.md) | Post-MVP features (capabilities, identity, TTS, governance DMs) |
 | [`docs/ai_logging_notice.md`](docs/ai_logging_notice.md) | Template notice for server members |
 | [`docs/jeu.pdf`](docs/jeu.pdf) | Game design (RAG source) |
 | [`.cursor/plans/discord_ai_bot_4b8e92eb.plan.md`](.cursor/plans/discord_ai_bot_4b8e92eb.plan.md) | Original milestone plan (M0–M6) |

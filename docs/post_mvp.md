@@ -1,41 +1,144 @@
+# Post-MVP — Tramice721 Discord Bot
 
+> Features added after milestones M0–M6 (July 2026).  
+> For core milestone status see [`implementation_status.md`](implementation_status.md).
 
-# Write to be deleted
-ToDo: What to forget about a user? Can we just delete the data bu keep a trace of the user name, duration of activity?  
+---
 
-# members identity management
-If member changes name on server, the bot monitors server changes of members and associates the new member identity on the server with the old. If Members have more than one identity, members or admins can ask the bot to associate the names. The name of members on the server can be a list with one or more than one names. This may require a function, a / call to the bot to perform this activity / change in the database.  
+## Overview
 
-# Governance
-ToDo: The bot can suggest to server admins by DM to ban or suspend a member, with resons related to social norms and based on guardrails.  
+Post-MVP work extends the playtest bot with **Discord affordance awareness**,
+**identity continuity**, **governance escalation**, and **platform actions**
+(threads, polls, TTS, scheduled events) — without changing the core
+*L'IA propose, la communauté dispose* principle.
 
+---
 
-# Bot communicatin strategy
-ToDo: Create a file in memory that explains how Discord works, functionality, and what the role of the Bot allows it to do. This file will be used by the Bot to decide how to act, ex. create a new thread, use @everyone, use emogi, ignor the slow mode, etc. This file wopuld be initialized when we launch the Bot, by cheching all affordances on Discord, listing them and associating communication strategy. 
-Schedule scan of capabilities, in case the roles for the Bot are changed by admins, update this file and update communication strategy communication for the bot. 
+## Implemented
 
-ToDo: 
-- Bot has the ability to create threads in allowawed channels.
-- Bot has Ability to create surveys.
-- Bot can use Discord's soundbord and send sounds.
+### Activity traces on `/forgetme`
 
-# texty to speach in channels
-ToDo: integrate ability to set tts: true in a message payload, so that a Discord client can listen to a synthesized voice. ex. 
+When a member runs `/forgetme`, the bot deletes their messages, profile, volios,
+confidences, LangGraph checkpoints, Chroma `history` embeddings, and per-user
+model preference — but **retains a minimal audit row** in `activity_traces`:
 
-POST /channels/{channel.id}/messages
-{
-  "content": "Bonjour, c'est Tramice721.",
-  "tts": true
-}
+- display name at deletion time
+- first and last activity timestamps
+- message count
+- `forgotten_at` timestamp
 
-with With discord.py our project uses discord.py==2.7.1, the equivalent is: 
+This answers the privacy question: *delete the data, keep a trace of who was
+active and for how long* (no message content retained).
 
-await channel.send("Bonjour, c'est Tramice721.", tts=True)
+**Code:** `services/memory.py`, `storage/db.py` (`activity_traces` table).
 
-or for slash commands:
-await interaction.followup.send("Bonjour...", tts=True)
+### Member identity and aliases
 
-Interaction responses also support a tts field in the callback payload.
+The bot tracks display-name changes automatically:
 
-# Coordination
-Bot can create events on Discord, for example the weekly game. 
+- On each logged message (`on_message`)
+- On `on_member_update` / `on_user_update` (Discord nickname/display changes)
+
+Known names are stored in `member_aliases`. Members and admins can manage
+linked identities via `/identite`:
+
+| Action | Who | Behaviour |
+|--------|-----|-----------|
+| `noms` (default) | Anyone (own profile) or admin (any member) | List all known names for a user (including linked accounts) |
+| `lier` | The two members involved, or an admin | Associate two Discord user IDs as the same person |
+
+**Code:** `services/identity.py`, `bot/discord_client.py`, `/identite` in
+`bot/commands.py`.
+
+### Discord capability scanner
+
+At startup and daily at **04:00** (Montreal), the bot scans guild and
+allowlisted-channel permissions and writes `data/capabilities.json`. A French
+**communication strategy note** is injected into the agent system prompt and
+exposed via the `get_discord_capabilities` agent tool.
+
+Tracked permissions include: send messages, TTS, threads, scheduled events,
+`@everyone`, slow-mode bypass (`manage_messages`), soundboard, external emojis,
+voice.
+
+**Code:** `bot/capabilities.py`, `scheduler/jobs.py` (`capability_scan` job),
+`ai/agent/graph.py`, `ai/agent/community_tools.py`.
+
+### Platform actions
+
+| Feature | Command / trigger | Permission gate | Status |
+|---------|-------------------|-----------------|--------|
+| Create threads | `/thread` | `CREATE_*_THREADS` in channel | Implemented |
+| Create polls | `/sondage` | `SEND_MESSAGES` in channel | Implemented (24 h Discord poll) |
+| TTS messages | `/say` (admin) | `SEND_TTS_MESSAGES`; `features.tts: true` | Implemented |
+| List soundboard | `/son` | `USE_SOUNDBOARD` | List only; playback not yet wired |
+| Discord scheduled events | `/event` confirm, `game_week_open` job | `MANAGE_EVENTS` | Implemented when permitted |
+
+**Code:** `bot/discord_actions.py`, `bot/commands.py`, `services/coordination.py`
+(`attach_discord_event_id`).
+
+### Governance escalation DMs
+
+After a `/signalement`, `GovernanceService.evaluate_moderation()` checks open
+reports against `governance.escalation_threshold` (default **3**) and level-3
+(danger) reports. When thresholds are crossed, the bot **DMs guild owner and
+admin-role members** with a moderation suggestion (suspend, ban, or reinforced
+mediation) citing social norms — it never acts autonomously.
+
+**Code:** `services/governance.py`, `bot/discord_client.py` (`dm_admins`),
+`/signalement` handler.
+
+### Discord error handling and runtime health
+
+- `bot/discord_errors.py` classifies Discord API failures (token, intents,
+  HTTP codes 50001/50013, rate limits) with operator-friendly French hints.
+- `safe_channel_send` prevents unhandled send failures from crashing handlers.
+- `/health` now reports gateway latency, router queue depth, last capability
+  scan, and event/job error counters (`bot/observability.py`).
+
+Set `DISCORD_LOG_LEVEL=INFO` in `.env` when diagnosing first connect.
+
+### Model selection UI
+
+`/model` (admin) and `/modele` (per-user) offer a **dropdown select menu**
+(`ModelSelectView` in `bot/ui.py`) in addition to autocomplete. `/modele nom:defaut`
+clears the personal override.
+
+---
+
+## Configuration (post-MVP)
+
+```yaml
+features:
+  tts: true                    # enable /say (admin TTS)
+
+governance:
+  escalation_threshold: 3      # open signalements before admin DM suggestion
+```
+
+Runtime file: `data/capabilities.json` (gitignored; regenerated by scan).
+
+---
+
+## Remaining / partial
+
+| Item | Notes |
+|------|-------|
+| Soundboard playback | `/son` lists sounds; automatic voice-channel playback not implemented |
+| Agent-initiated threads/TTS | Slash commands exist; agent does not yet call thread/TTS tools directly |
+| `@everyone` send path | Capability tracked; gated send helper still deferred (`features.everyone_announcements`) |
+| Proactive Échos DMs | Reactive only; opt-in notify path still in planning |
+| Full identity merge UX | `/identite lier` works; no agent tool wrapper yet |
+
+See [`planning.md`](planning.md) Phases 2–3 for follow-up work.
+
+---
+
+## Tests
+
+| Module | Covers |
+|--------|--------|
+| `tests/test_post_mvp.py` | Activity traces, aliases/links, moderation thresholds, capabilities |
+| `tests/test_discord_errors.py` | Error classification, runtime health, `dm_admins` edge cases |
+
+Run: `pip install -r requirements-dev.txt && PYTHONPATH=. pytest tests/ -q`

@@ -8,10 +8,10 @@
 
 | Field               | Value                                              |
 | ------------------- | -------------------------------------------------- |
-| Version             | 0.1 (draft)                                        |
-| Status              | Pre-implementation                                 |
+| Version             | 0.2                                                |
+| Status              | Implemented (M0–M6 + post-MVP July 2026)             |
 | Primary runtime     | Python 3.12, discord.py 2.7, Ollama (local)        |
-| Default LLM         | `qwen2.5:7b-instruct`                              |
+| Default LLM         | `qwen2.5:7b-instruct` (per-user override: `/modele`) |
 | Default embed model | `nomic-embed-text`                                 |
 | Target environment  | CPU-only, ~15 GB RAM, single Ollama inference slot |
 
@@ -130,7 +130,13 @@ discord-ai-bot/
 │   ├── config.py            # .env + config.yaml loader
 │   ├── handlers.py          # prefix / mention / slash routing
 │   ├── router.py            # rate limiter + single-flight queue
-│   └── discord_client.py    # discord.py setup, intents, events
+│   ├── discord_client.py    # discord.py setup, intents, events
+│   ├── capabilities.py      # permission scan → capabilities.json (post-MVP)
+│   ├── discord_actions.py   # threads, scheduled events, soundboard (post-MVP)
+│   ├── discord_errors.py    # classified Discord API errors (post-MVP)
+│   ├── commands.py          # slash command registration
+│   ├── ui.py                # ConfirmView, ModelSelectView
+│   └── observability.py     # JSON logs, audit, health, heartbeat
 ├── services/
 │   ├── identity.py          # [identity]
 │   ├── matchmaking.py       # [matchmaking]
@@ -538,6 +544,41 @@ CREATE TABLE echoes (
     read          INTEGER DEFAULT 0,
     created_at    TEXT NOT NULL
 );
+
+-- Post-MVP: activity trace, aliases, per-user model preference
+CREATE TABLE activity_traces (
+    user_id         TEXT PRIMARY KEY,
+    display_name    TEXT,
+    first_activity  TEXT,
+    last_activity   TEXT,
+    message_count   INTEGER NOT NULL DEFAULT 0,
+    forgotten_at    TEXT NOT NULL
+);
+
+CREATE TABLE member_aliases (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id       TEXT NOT NULL,
+    name          TEXT NOT NULL,
+    first_seen    TEXT NOT NULL,
+    last_seen     TEXT NOT NULL,
+    is_current    INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (user_id, name)
+);
+
+CREATE TABLE identity_links (
+    user_id_a     TEXT NOT NULL,
+    user_id_b     TEXT NOT NULL,
+    linked_by     TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    PRIMARY KEY (user_id_a, user_id_b),
+    CHECK (user_id_a < user_id_b)
+);
+
+CREATE TABLE user_model_prefs (
+    discord_user_id   TEXT PRIMARY KEY,
+    model             TEXT NOT NULL,
+    updated_at        TEXT NOT NULL
+);
 ```
 
 
@@ -801,11 +842,18 @@ Config key: `triggers.prefix` default `!ai`.
 | `/vote`        | governance     | all    | View/open votes                              |
 | `/event`       | coordination   | all    | Propose or list events                       |
 | `/signalement` | governance     | all    | File graduated report                        |
-| `/forgetme`    | memory         | all    | Delete user's stored data                    |
+| `/forgetme`    | memory         | all    | Delete user's stored data (retains activity trace) |
 | `/normes`      | governance     | all    | Show social norms                            |
+| `/modele`      | administration | all    | Choose personal Ollama model (dropdown)      |
+| `/identite`    | identity       | all    | List known names or link identities          |
+| `/thread`      | platform       | all    | Create a channel thread                      |
+| `/sondage`     | platform       | all    | Publish a Discord poll                       |
+| `/son`         | platform       | all    | List soundboard sounds                       |
 | `/reindex`     | administration | admin  | Rebuild Chroma index                         |
-| `/model`       | administration | admin  | Swap Ollama model                            |
+| `/model`       | administration | admin  | Swap community default Ollama model          |
 | `/norm-set`    | governance     | admin  | Update a social norm                         |
+| `/health`      | administration | admin  | Runtime + Discord health snapshot            |
+| `/say`         | platform       | admin  | Send TTS message (`features.tts`)            |
 
 
 **Confirmation pattern:** for mutating game/governance actions, respond with
@@ -835,8 +883,9 @@ Discord embed + `✅ Confirmer` / `❌ Annuler` buttons (`discord.ui.View`).
 | `index_new_messages`     | `0 2 * * *`     | Embed unindexed messages → Chroma `history` |
 | `refresh_knowledge_base` | `0 3 * * 0`     | Re-ingest `docs/` if changed                |
 | `build_daily_summary`    | `0 8 * * *`     | Post summary to `summary_channel_id`        |
-| `game_week_open`         | `0 17 * * 4`    | Open investment window; announce budgets    |
+| `game_week_open`         | `0 17 * * 4`    | Open investment window; announce budgets; optional Discord event |
 | `game_week_close`        | `59 23 * * 0`   | Close window; finalize allocations          |
+| `capability_scan`        | `0 4 * * *`     | Refresh `data/capabilities.json` (post-MVP) |
 
 
 All jobs log start/end + row counts to structured logger.
@@ -856,6 +905,7 @@ DISCORD_TOKEN=
 OLLAMA_HOST=http://127.0.0.1:11434
 GUILD_ID=                    # primary lab server
 ADMIN_ROLE_IDS=              # comma-separated
+DISCORD_LOG_LEVEL=WARNING    # set INFO for first-connect diagnostics
 ```
 
 
@@ -886,6 +936,10 @@ features:
   matchmaking: true
   web_fetch: false
   everyone_announcements: false
+  tts: true                    # admin /say
+
+governance:
+  escalation_threshold: 3      # open signalements before admin DM suggestion
 
 rate_limit:
   per_user_cooldown_sec: 10
@@ -998,8 +1052,10 @@ Structured JSON to stdout (M6): `level`, `event`, `guild_id`, `channel_id`,
 
 ### 11.3 Health checks
 
-- On startup: ping Ollama `/api/tags`, verify SQLite writable, Chroma reachable.
-- Optional `/health` admin slash (M6): reports versions + last job runs.
+- On startup: ping Ollama `/api/tags`, verify SQLite writable, Chroma reachable;
+  run capability scan when `GUILD_ID` is set.
+- `/health` admin slash: Ollama, SQLite, Chroma, scheduler jobs, gateway
+  latency, router queue, last capability scan, event/job error counters.
 
 ---
 
@@ -1011,61 +1067,61 @@ Structured JSON to stdout (M6): `level`, `event`, `guild_id`, `channel_id`,
 
 ### M0 — Foundation
 
-- [ ] Repo structure matches §2.4
-- [ ] `config.yaml` + `.env.example` load without error
-- [ ] `storage/db.py` creates `app.sqlite` + `history.sqlite` schemas
+- [x] Repo structure matches §2.4
+- [x] `config.yaml` + `.env.example` load without error
+- [x] `storage/db.py` creates `app.sqlite` + `history.sqlite` schemas
 
 
 
 ### M1 — Working bot `[platform]` `[persona]`
 
-- [ ] Bot connects to Discord; responds to `!ai`, `@mention`, `/ask`
-- [ ] Direct Ollama call with persona system prompt
-- [ ] `/model` swaps model at runtime
-- [ ] Does not reply to other bots
+- [x] Bot connects to Discord; responds to `!ai`, `@mention`, `/ask`
+- [x] Direct Ollama call with persona system prompt
+- [x] `/model` swaps model at runtime
+- [x] Does not reply to other bots
 
 
 
 ### M2 — Persistence `[community-memory]` `[identity]`
 
-- [ ] All readable messages logged per channel policy
-- [ ] `/forgetme` soft-deletes user messages + profile rows
-- [ ] LangGraph checkpointer restores multi-turn DM context
+- [x] All readable messages logged per channel policy
+- [x] `/forgetme` soft-deletes user messages + profile rows
+- [x] LangGraph checkpointer restores multi-turn DM context
 
 
 
 ### M3 — RAG `[knowledge]`
 
-- [ ] `docs/jeu.pdf` + `requirements.md` ingested into Chroma
-- [ ] `/ask` about HOP / weekly cycle returns grounded answer with source hint
-- [ ] `/reindex` rebuilds index
+- [x] `docs/jeu.pdf` + `requirements.md` ingested into Chroma
+- [x] `/ask` about HOP / weekly cycle returns grounded answer with source hint
+- [x] `/reindex` rebuilds index
 
 
 
 ### M4 — MCP & services
 
-- [ ] `discord_helper` + `rag_server` wired via MultiServerMCPClient
-- [ ] `/volio`, `/mondo`, `/echoes`, `/summarize` functional
-- [ ] Matchmaking proposes connections; no auto-DM
-- [ ] Social norms readable via `/normes`
+- [x] `discord_helper` + `rag_server` wired via MultiServerMCPClient
+- [x] `/volio`, `/mondo`, `/echoes`, `/summarize` functional
+- [x] Matchmaking proposes connections; no auto-DM
+- [x] Social norms readable via `/normes`
 
 
 
 ### M5 — Scheduling & game `[game]` `[governance]`
 
-- [ ] Nightly message indexing job runs
-- [ ] Daily summary posts to configured channel
-- [ ] Weekly game open/close jobs fire; `/place` and `/mission` work with confirmation
-- [ ] `/vote` creates vote; ballots tallied against threshold
+- [x] Nightly message indexing job runs
+- [x] Daily summary posts to configured channel
+- [x] Weekly game open/close jobs fire; `/place` and `/mission` work with confirmation
+- [x] `/vote` creates vote; ballots tallied against threshold
 
 
 
 ### M6 — Production hardening
 
-- [ ] Ollama Modelfile for persona
-- [ ] Rate limiter + queue tuned under load
-- [ ] Audit log + health check
-- [ ] README with deploy steps (venv, ollama pull, systemd optional)
+- [x] Ollama Modelfile for persona
+- [x] Rate limiter + queue tuned under load
+- [x] Audit log + health check
+- [x] README with deploy steps (venv, ollama pull, systemd optional)
 
 ---
 
@@ -1083,21 +1139,39 @@ accounting, physical booklets, biometric identity, multi-server sync protocol.
 ## 14. Open decisions (blockers)
 
 
-| #   | Decision                                      | Spec impact                |
-| --- | --------------------------------------------- | -------------------------- |
-| 1   | `GUILD_ID` + `summary_channel_id`             | §9.2, scheduler jobs       |
-| 2   | `log_mode: allowlist` vs `all`                | §4.1, §10.2                |
-| 3   | Game enforce vs assist                        | §5.4 validation strictness |
-| 4   | Confirm `qwen2.5:7b-instruct` as default soul | §9.2                       |
-| 5   | `@everyone` enabled?                          | §7.1, §9.2                 |
-| 6   | Default social norms for playtest             | §9.3 seed values           |
+| #   | Decision                                      | Status / recommendation        |
+| --- | --------------------------------------------- | ------------------------------ |
+| 1   | `GUILD_ID` + `summary_channel_id`             | Set in lab deployment          |
+| 2   | `log_mode: allowlist` vs `all`                | **Allowlist** + AI notice      |
+| 3   | Game enforce vs assist                        | **Assist** for playtest        |
+| 4   | Default LLM soul                              | `qwen2.5:7b-instruct`; `/modele` for experiments |
+| 5   | `@everyone` enabled?                          | Deferred; capability tracked   |
+| 6   | Default social norms for playtest             | Seeded in §9.3; `/norm-set`    |
 
 
 ---
 
 
 
-## 15. Glossary (spec usage)
+## 15. Post-MVP additions (July 2026)
+
+Implemented after M6; see [`post_mvp.md`](post_mvp.md) for detail.
+
+| Area | Deliverable |
+| ---- | ----------- |
+| Privacy | `activity_traces` on `/forgetme` |
+| Identity | `member_aliases`, `identity_links`, `/identite` |
+| Platform | Capability scan, `/thread`, `/sondage`, `/say`, `/son` |
+| Coordination | Discord scheduled events on `/event` + `game_week_open` |
+| Governance | Moderation DM suggestions (`governance.escalation_threshold`) |
+| Ops | `discord_errors.py`, expanded `/health`, `DISCORD_LOG_LEVEL` |
+
+
+---
+
+
+
+## 16. Glossary (spec usage)
 
 
 | Term    | Spec meaning                                               |

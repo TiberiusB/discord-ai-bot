@@ -28,10 +28,11 @@ pass — those are recorded in
 
 ## Current position
 
-The application code for milestones **M0–M6 is in place**: Discord triggers,
-LangGraph agent, RAG, service layer, scheduler, guardrails, deployment assets,
-and a minimal test suite. A **pre-Discord hardening round** added operational
-reliability (logging, health probes, strict allowlist, extended `/forgetme`).
+The application code for milestones **M0–M6 is in place**, plus a **post-MVP
+round** (capabilities scan, identity aliases, governance DM escalation, Discord
+platform actions — see [`post_mvp.md`](post_mvp.md)). A **pre-Discord hardening
+round** added operational reliability (logging, health probes, strict allowlist,
+extended `/forgetme`).
 
 **We have not yet connected to a live Discord server** or validated behavior
 with real trammers. The immediate goal is a **narrow, allowlisted playtest** on
@@ -76,8 +77,8 @@ spec sections where possible.
 | Tribunal workflow UI | GOV-7, GOV-8, spec §5.6 | `open_tribunal`, `draw_jury`, `record_jurisprudence` in `GovernanceService`; `/signalement` only | Admin slash commands for tribunal lifecycle |
 | Output data-classification | spec §10.3, IDN-6 | Link allowlist + feminine fixes only | Requester/owner checks before exposing private tier data |
 | Tool result size cap (8 KB) | spec §10.3 | Not enforced | Truncate tool returns in agent layer |
-| Proactive DMs to members | PLT-4 | Reactive DMs only | Optional notify path for Échos (with consent) |
-| `@everyone` announcements | PLT-4, ADM-4 | Config flag; no send path | Gated helper for game-week posts if needed |
+| Soundboard playback | post-MVP | `/son` lists sounds; no voice playback | Wire playback when voice connect is added |
+| `@everyone` announcements | PLT-4, ADM-4 | Capability tracked in scan; no send path | Gated helper for game-week posts if needed |
 | Web / LaTramice.net RAG | KNW-3, requirements TODO | `features.web_fetch: false` | Enable fetch MCP + scheduled web ingest |
 | Browser-search MCP | requirements §3.3 TODO | Not started | Evaluate after web fetch |
 | Social-norm enforcement in code | GOV-12, requirements TODO | Norms stored and shown; partial policy in handlers | Central policy module used by RAG, summaries, profiles |
@@ -85,18 +86,31 @@ spec sections where possible.
 | Enterprise / Quête dashboards | IDN-2, ECO-3 | Entity model exists; text listings via `/mondo` | Richer embeds or `/entity` command |
 | Mediation in heated salons | GOV-5, GOV-6 | Persona prompt only | Detect + offer mediation (careful: false positives) |
 | Matchmaking discreet flags | MTM-5 | Not implemented | Consent-gated vulnerability notes |
-| `services/platform.py` | spec §2.4 | Logic in `bot/` | Optional refactor; low priority |
+| `services/platform.py` | spec §2.4 | Logic in `bot/` (incl. `capabilities.py`, `discord_actions.py`) | Optional refactor; low priority |
+
+### Completed post-MVP (July 2026)
+
+These were open in earlier planning notes; now shipped — see [`post_mvp.md`](post_mvp.md):
+
+| Item | Status |
+|------|--------|
+| Activity trace on `/forgetme` | Done (`activity_traces`) |
+| Member alias tracking + `/identite` | Done |
+| Governance admin DM suggestions | Done (`/signalement` escalation) |
+| Discord capability scan + agent strategy | Done (`capability_scan` job) |
+| Threads, polls, TTS | Done (`/thread`, `/sondage`, `/say`) |
+| Discord scheduled events | Partial (needs `MANAGE_EVENTS`) |
+| Proactive DMs to members (Échos) | Still deferred |
 
 ### Quality and ops (Phase 3)
 
 | Gap | Req / spec | Current state | Planned work |
 |-----|------------|---------------|--------------|
-| Integration / E2E tests | NFR-2 (understandable code) | 13 unit tests | Mock Discord + Ollama; service integration tests |
+| Integration / E2E tests | NFR-2 (understandable code) | 25 unit tests | Mock Discord + Ollama; service integration tests |
 | Game rule test coverage | GME-5 | HOP logic untested in CI | Tests for `GameService` validation |
 | `/forgetme` E2E | MEM-2 | Unit tests for checkpoints | Verify Chroma delete against real index |
 | Privileged intent review | Discord policy | Required if guild > 100 members | Monitor member count; submit verification if needed |
 | `LICENSE` | — | Missing | Add if distributing beyond lab |
-| Spec doc metadata | — | `specifications.md` says "Pre-implementation" | Update status field when convenient |
 
 ### Explicitly out of scope (v1)
 
@@ -197,6 +211,7 @@ flowchart LR
 | LaTramice.net fetch + ingest | KNW-3, knowledge TODO | `features.web_fetch: true`; `web` Chroma collection; admin docs |
 | Scheduled web refresh | ADM-2 | Job or manual `/reindex` extension for web collection |
 | Échos notification DMs | PLT-4 (optional) | Opt-in DM when synergy found; never auto-connect |
+| Soundboard voice playback | post-MVP | List via `/son`; playback deferred | Connect to voice + play sound |
 | `@everyone` for game week | PLT-4, ADM-4 | Gated by `everyone_announcements` + admin role |
 | Custom Modelfile in production | persona M6 | `ollama create tramice721`; document in README |
 | Enterprise dashboard command | ECO-1, IDN-2 | `/entity` or expanded `/mondo` embed |

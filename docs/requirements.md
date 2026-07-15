@@ -432,7 +432,7 @@ Logging, retention, and history-powered features.
 | ID    | Requirement                                                                                                                                             |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | MEM-1 | MUST log readable messages to a local store to power summaries, matchmaking, and RAG-over-history, honoring channel allow/deny list. `[administration]` |
-| MEM-2 | MUST offer a member data-deletion path (e.g. `/forgetme`).                                                                                              |
+| MEM-2 | MUST offer a member data-deletion path (e.g. `/forgetme`). MAY retain a minimal activity trace (name, span, count) without message content. |
 | MEM-3 | Confidences to the tramice and DMs MUST stay private — not surfaced in public summaries or matchmaking without consent. `[governance]` `[identity]`     |
 | MEM-4 | SHOULD post a scheduled **daily/periodic server summary** to a configured channel. `[governance]` `[administration]`                                    |
 
@@ -450,7 +450,7 @@ Operator-facing configuration and maintenance.
 
 | ID    | Requirement                                                                                           |
 | ----- | ----------------------------------------------------------------------------------------------------- |
-| ADM-1 | MUST support **model swap** (config + `/model` command) — the tramice "soul" is replaceable.          |
+| ADM-1 | MUST support **model swap** (config + `/model` command) — the tramice "soul" is replaceable. Per-user override via `/modele`. |
 | ADM-2 | SHOULD support manual `/reindex` and scheduled indexing/summaries. `[knowledge]` `[community-memory]` |
 | ADM-3 | SHOULD expose channel allow/deny list and feature flags via `config.yaml` / `.env`.                   |
 | ADM-4 | SHOULD gate `@everyone` announcements behind explicit permission/config. `[platform]`                 |
@@ -554,7 +554,7 @@ Physical registers (paper; bot explains, does not replace): **Recognition Bookle
 | `[ecosystem-mapping]` | M4 `get_server_overview`; Mondo-style listing tools                                |
 | `[governance]`        | M4/M5 agent (summaries, votes, mediation, jury draw, social norms config)          |
 | `[community-memory]`  | M2 SQLite message log; M5 daily summary job                                        |
-| `[administration]`    | M1 `/model`; M3 `/reindex`; `bot/config.py`; M6 guardrails, rate-limit/queue       |
+| `[administration]`    | M1 `/model`, `/modele`; M3 `/reindex`; `bot/config.py`; M6 guardrails, rate-limit/queue; post-MVP `/health`, capability scan |
 
 
 ---

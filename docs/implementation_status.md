@@ -68,10 +68,10 @@ complete the Discord Developer Portal setup described in the
 | Core milestones M0–M6 | **Done** | All planned milestones marked complete in the implementation plan |
 | Pre-Discord hardening | **Done** | Observability, deployment polish, tests, privacy baseline |
 | Live Discord testing | **Not started** | Requires operator `.env`, allowlist, and server invite |
-| Automated test suite | **Minimal** | 13 unit tests; no integration tests against Discord or Ollama |
+| Automated test suite | **Minimal** | 25 unit tests; no integration tests against Discord or Ollama |
 | Production at scale | **Not targeted** | Single guild, CPU-only, no sharding |
 
-Approximate size: **~5,100 lines** of Python application code (excluding
+Approximate size: **~7,100 lines** of Python application code (excluding
 `venv/`, tests, and docs).
 
 ---
@@ -108,6 +108,22 @@ A focused pass before first Discord connection added:
 - `tests/` suite (13 tests) and GitHub Actions CI
 - **Per-user model selection** (`/modele`): trammers choose their own Ollama chat
   model with caution messaging; stored in `user_model_prefs`, resolved per turn
+
+### Post-MVP round (July 2026)
+
+After M0–M6 and the pre-Discord hardening pass, additional platform and
+governance features shipped. Full detail in [`post_mvp.md`](post_mvp.md).
+
+- **Activity traces** on `/forgetme` (`activity_traces` table)
+- **Member aliases** + `/identite` (auto-track renames; manual identity linking)
+- **Capability scanner** (`bot/capabilities.py`, `data/capabilities.json`,
+  daily `capability_scan` job, agent prompt injection)
+- **Platform actions**: `/thread`, `/sondage`, `/say` (TTS), `/son` (soundboard
+  list), Discord scheduled events on `/event` confirm and `game_week_open`
+- **Governance escalation**: admin DM suggestions after `/signalement` thresholds
+- **Discord error handling** (`discord_errors.py`) and expanded `/health`
+- **Model dropdown UI** (`ModelSelectView`) for `/model` and `/modele`
+- **Tests**: `test_post_mvp.py`, `test_discord_errors.py` (25 tests total)
 
 ---
 
@@ -157,7 +173,10 @@ Entry point: `python -m bot.main` (or `./run.sh`).
 | Message router | `router.py` | Single-flight queue, cooldowns, `SubmitResult` |
 | Trigger handlers | `handlers.py` | Prefix, mention, DM; allowlist/denylist |
 | Slash commands | `commands.py` | Full command set (see README) |
-| Confirmation UI | `ui.py` | `ConfirmView` for mutating actions |
+| Confirmation UI | `ui.py` | `ConfirmView` for mutating actions; `ModelSelectView` for `/model` `/modele` |
+| Capabilities | `capabilities.py` | Permission scan → `data/capabilities.json`; agent strategy note |
+| Discord actions | `discord_actions.py` | Scheduled events, threads, soundboard listing |
+| Discord errors | `discord_errors.py` | Classified errors, `safe_channel_send` |
 | Guardrails delivery | via `ai/guardrails.py` | Input sanitize, output post-process |
 | Observability | `observability.py` | JSON logs, audit log, turn/job metrics, heartbeat |
 | Startup validation | `startup.py` | Pre-launch config warnings |
@@ -168,8 +187,9 @@ bots (PLT-5).
 **Slash commands (all registered):**
 
 - Everyone: `/ask`, `/summarize`, `/volio`, `/mondo`, `/echoes`, `/event`,
-  `/mission`, `/place`, `/vote`, `/signalement`, `/normes`, `/modele`, `/forgetme`
-- Admin: `/model`, `/reindex`, `/norm-set`, `/health`
+  `/mission`, `/place`, `/vote`, `/signalement`, `/normes`, `/modele`,
+  `/forgetme`, `/identite`, `/thread`, `/sondage`, `/son`
+- Admin: `/model`, `/reindex`, `/norm-set`, `/health`, `/say`
 
 **Model selection:** `/modele` lets each trammer choose a locally-installed chat
 model for their own conversations (autocomplete, embedding model filtered out,
@@ -204,13 +224,13 @@ Optional Ollama Modelfile: `prompts/tramice721_modelfile`.
 
 | Service | File | Implemented |
 |---------|------|-------------|
-| Identity | `identity.py` | Trammers, volios, confidences, public profiles |
-| Memory | `memory.py` | Logging facade, extended `/forgetme` (incl. model pref) |
+| Identity | `identity.py` | Trammers, volios, confidences, aliases, identity links |
+| Memory | `memory.py` | Logging facade, extended `/forgetme` (trace + model pref) |
 | Knowledge | `knowledge.py` | RAG search, reindex |
 | Matchmaking | `matchmaking.py` | Synergies, Échos (propose-only) |
 | Coordination | `coordination.py` | Events, RSVPs, teams |
 | Ecosystem | `ecosystem.py` | Mondo perso/cosmo listings |
-| Governance | `governance.py` | Norms, votes, summaries, signalements, jury draw (service-level) |
+| Governance | `governance.py` | Norms, votes, summaries, signalements, moderation DM suggestions |
 | Game | `game.py` | Weekly cycle, HOP rules, missions, placements |
 | Registry | `registry.py` | Wires all services at startup |
 
@@ -220,7 +240,7 @@ Not present as a separate module: `services/platform.py` (logic lives in `bot/`)
 
 | Store | File | Purpose |
 |-------|------|---------|
-| `app.sqlite` | `db.py` | Trammers, volios, entities, game, governance, per-user model prefs |
+| `app.sqlite` | `db.py` | Trammers, volios, entities, game, governance, aliases, activity traces, model prefs |
 | `history.sqlite` | `history.py` | Message log with soft-delete |
 | `checkpoints.sqlite` | LangGraph | Per-thread agent memory |
 | Checkpoint cleanup | `checkpoints.py` | Delete threads on `/forgetme` |
@@ -249,6 +269,7 @@ All jobs run in `America/Montreal` (configurable):
 | `build_daily_summary` | Daily 08:00 | Implemented (needs `summary_channel_id`) |
 | `game_week_open` | Thursday 17:00 | Implemented |
 | `game_week_close` | Sunday 23:59 | Implemented |
+| `capability_scan` | Daily 04:00 | Implemented (refreshes `data/capabilities.json`) |
 
 Jobs log duration and outcome via `log_job()`.
 
@@ -274,8 +295,10 @@ Set `LOG_JSON=1` for structured JSON logs in production.
 | `test_guardrails.py` | Input sanitize, link stripping |
 | `test_startup.py` | Launch config warnings |
 | `test_checkpoints.py` | Thread deletion on forget |
+| `test_post_mvp.py` | Activity traces, aliases, moderation, capabilities |
+| `test_discord_errors.py` | Discord error classification, runtime health |
 
-Run: `pip install -r requirements-dev.txt && pytest tests/ -q`
+Run: `pip install -r requirements-dev.txt && PYTHONPATH=. pytest tests/ -q`
 
 ---
 
@@ -287,8 +310,15 @@ needing operator decisions — not blockers for a controlled first playtest.
 | Item | Status | Notes |
 |------|--------|-------|
 | Live Discord connection | Pending | Needs `DISCORD_TOKEN`, `GUILD_ID`, allowlist |
-| Tribunal admin workflow | Partial | `GovernanceService.open_tribunal` / `draw_jury` exist; no slash/admin UI |
-| Proactive DMs to members | Not implemented | PLT-4; only reactive DMs today |
+| Tribunal admin workflow | Partial | `GovernanceService` jury/tribunal methods exist; no slash/admin UI |
+| Governance admin DM suggestions | **Done** | `/signalement` → `evaluate_moderation` → `dm_admins` (post-MVP) |
+| Member alias / identity linking | **Done** | Auto-track + `/identite` (post-MVP) |
+| Activity trace on `/forgetme` | **Done** | `activity_traces` table (post-MVP) |
+| Capability scan + agent strategy | **Done** | `capabilities.json` + daily job (post-MVP) |
+| Discord threads / polls / TTS | **Done** | `/thread`, `/sondage`, `/say` (post-MVP) |
+| Discord scheduled events | Partial | On `/event` confirm + `game_week_open`; needs `MANAGE_EVENTS` |
+| Soundboard playback | Partial | `/son` lists sounds; voice playback not wired |
+| Proactive DMs to members | Not implemented | PLT-4; only reactive DMs and admin escalation today |
 | `@everyone` announcements | Not implemented | Config flag exists; no send path |
 | Web fetch MCP | Config only | `features.web_fetch: false`; requires `uvx mcp-server-fetch` |
 | Output data-classification | Partial | Link allowlist + feminine fixes; no requester/owner checks on private data |
@@ -296,7 +326,6 @@ needing operator decisions — not blockers for a controlled first playtest.
 | Multi-server / sharding | Out of scope | Single guild playtest |
 | `LICENSE` file | Missing | README notes this |
 | Integration / E2E tests | Missing | No automated Discord or Ollama integration tests |
-| `docs/specifications.md` header | Stale | Still says "Pre-implementation" in metadata |
 
 ---
 
@@ -323,6 +352,7 @@ needing operator decisions — not blockers for a controlled first playtest.
 | [`planning.md`](planning.md) | Gaps and phased future development |
 | [`requirements.md`](requirements.md) | What the bot must do (service tags, NFRs) |
 | [`specifications.md`](specifications.md) | How it is built (schemas, APIs, acceptance criteria) |
+| [`post_mvp.md`](post_mvp.md) | Post-MVP features (capabilities, identity, platform actions) |
 | [`ai_logging_notice.md`](ai_logging_notice.md) | Template notice for server members |
 | [`README.md`](../README.md) | Quick start, commands, deployment |
 | [Implementation plan](../.cursor/plans/discord_ai_bot_4b8e92eb.plan.md) | Milestone history (M0–M6) |
