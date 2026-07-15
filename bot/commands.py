@@ -22,7 +22,7 @@ PERM_DENIED = "Je n'ai pas la permission pour cette action."
 
 _MODEL_ADMIN_INFO = (
     "ℹ️ `/model` change le modèle par défaut pour **toute la communauté** "
-    "(sauf les trammers ayant choisi le leur avec `/modele`). Le choix "
+    "(sauf les tramarades ayant choisi le leur avec `/modele`). Le choix "
     "n'est pas persisté : il revient à `config.yaml` au redémarrage."
 )
 
@@ -78,7 +78,7 @@ async def _apply_admin_model(
         bot.on_model_changed(name)
     await interaction.followup.send(
         f"Nouvelle âme par défaut chargée : **{name}**. 🌱\n"
-        "S'applique à tous, sauf aux trammers ayant un modèle personnel "
+        "S'applique à tous, sauf aux tramarades ayant un modèle personnel "
         "(`/modele`). Non persisté : retour à `config.yaml` au redémarrage.",
         ephemeral=True,
     )
@@ -946,7 +946,7 @@ def register_m5_commands(bot) -> None:  # noqa: C901
                 return
             await interaction.response.send_message(
                 f"Mission publiée : **{entity.title}** ({entity.hop_requested:.2f} HOP "
-                f"demandés). Les trammers peuvent investir avec `/place`. 🚀"
+                f"demandés). Les tramarades peuvent investir avec `/place`. 🚀"
             )
             return
         if ecosystem is None:
