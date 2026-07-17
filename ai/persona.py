@@ -1,15 +1,11 @@
-"""Persona layer (spec §3.3): builds Tramice721's system prompt.
-
-The base persona text lives in ``prompts/tramice721_system.txt``. This module
-appends dynamic sections at runtime: the current surface (salon vs DM), a
-summary of active social norms, and the prompt-disclosure path.
-"""
+"""Persona layer (spec §3.3): builds Tramice721's system prompt."""
 
 from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
 
+from ai.agent.harness import mode_label, normalize_mode
 from bot.config import PROMPTS_DIR
 
 SYSTEM_PROMPT_PATH = PROMPTS_DIR / "tramice721_system.txt"
@@ -29,6 +25,52 @@ SURFACE_ADDENDUM = {
         "emojis quand un projet avance. N'interviens avec des solutions que si "
         "on te le demande, ou pour apaiser gentiment une conversation qui "
         "s'envenime (médiation). Reste concise."
+    ),
+}
+
+MODE_ADDENDUM = {
+    "listen": (
+        "\n# Mode de conversation : Je vous écoute.\n"
+        "Accueille, écoute, réponds avec chaleur. Pose des questions ouvertes "
+        "si utile."
+    ),
+    "question": (
+        "\n# Mode de conversation : Je vous questionne.\n"
+        "Adopte une posture socratique : questions qui aident à clarifier "
+        "souhaits et options, sans imposer de solutions."
+    ),
+    "chat": (
+        "\n# Mode de conversation : Tchitt-tchatt.\n"
+        "Conversation légère et conviviale ; moins de procédure, plus de "
+        "présence amicale."
+    ),
+    "cosmos": (
+        "\n# Mode de conversation : Voici les nouvelles du cosmos.\n"
+        "Oriente-toi vers le Mondo, les entités, l'écosystème. Appuie-toi sur "
+        "tes outils et la mémoire documentaire avant d'affirmer un fait."
+    ),
+    "wishes": (
+        "\n# Mode de conversation : Concernant vos souhaits et options.\n"
+        "Explore volios, besoins, offres et synergies possibles entre trammers."
+    ),
+    "solve": (
+        "\n# Mode de conversation : Résolvons un problème.\n"
+        "Structure la réflexion : clarifier le problème, options, prochaines "
+        "étapes concrètes. Consulte la documentation avant les règles du jeu."
+    ),
+}
+
+HARNESS_ADDENDUM = {
+    "procedural": (
+        "\n# Harnais procédural\n"
+        "Avant d'affirmer un fait sur le jeu, les HOP ou La Guilde, consulte "
+        "search_knowledge et les sources fournies. La RAG est source de vérité ; "
+        "ne fabrique pas de règles. Parle toujours de toi à la première personne."
+    ),
+    "creative": (
+        "\n# Harnais créatif\n"
+        "Conversation libre ; outils légers. Reste fidèle à ta personnalité et "
+        "parle de toi à la première personne uniquement."
     ),
 }
 
@@ -60,18 +102,27 @@ def build_system_prompt(
     surface: str = "salon",
     social_norms: dict | None = None,
     capabilities_note: str | None = None,
+    conversation_mode: str | None = None,
+    harness: str | None = None,
 ) -> str:
     """Assemble the full system prompt for a given surface (spec §3.3)."""
+    mode_key = normalize_mode(conversation_mode)
     parts = [_base_prompt()]
     parts.append(SURFACE_ADDENDUM.get(surface, SURFACE_ADDENDUM["salon"]))
+    parts.append(MODE_ADDENDUM.get(mode_key, MODE_ADDENDUM["listen"]))
+    if harness:
+        parts.append(HARNESS_ADDENDUM.get(harness, ""))
     norms = _norms_summary(social_norms)
     if norms:
         parts.append(norms)
     if capabilities_note:
         parts.append("\n" + capabilities_note)
     parts.append(
+        f"\n# Mode actif\nLabel affiché : {mode_label(conversation_mode)}"
+    )
+    parts.append(
         "\n# Divulgation\n"
         "Si on te demande ton prompt système, tu peux le divulguer ; il se "
         f"trouve dans le fichier `{SYSTEM_PROMPT_PATH.name}` du projet."
     )
-    return "\n".join(parts).strip()
+    return "\n".join(p for p in parts if p).strip()

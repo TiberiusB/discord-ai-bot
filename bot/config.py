@@ -39,6 +39,7 @@ class Settings:
     ollama_host: str = "http://127.0.0.1:11434"
     guild_id: str | None = None
     admin_role_ids: list[str] = field(default_factory=list)
+    architecture_role_ids: list[str] = field(default_factory=list)
 
     # Paths.
     project_root: Path = PROJECT_ROOT
@@ -128,6 +129,7 @@ def load_settings(config_path: Path | None = None) -> Settings:
         ollama_host=os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434"),
         guild_id=os.getenv("GUILD_ID") or None,
         admin_role_ids=_split_ids(os.getenv("ADMIN_ROLE_IDS")),
+        architecture_role_ids=_split_ids(os.getenv("ARCHITECTURE_ROLE_IDS")),
     )
 
     settings.data_dir.mkdir(parents=True, exist_ok=True)

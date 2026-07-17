@@ -118,6 +118,47 @@ class GameService:
             raise GameError(f"Semaine inconnue : {week_id}")
         return _row_to_week(row)
 
+    def _ensure_invest_window(self, week: GameWeek) -> None:
+        """Reject placements outside Thu 17:00 – Sun 23:59:59 when not investing."""
+        if week.status not in {"investing", "open"}:
+            raise GameError(
+                "La fenêtre de placement est fermée pour cette semaine. "
+                "Attends l'ouverture (jeudi 17 h) ou consulte les annonces."
+            )
+        now = datetime.now(self.tz)
+        starts = datetime.fromisoformat(week.starts_at)
+        if starts.tzinfo is None:
+            starts = starts.replace(tzinfo=self.tz)
+        end = datetime.fromisoformat(week.invest_end)
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=self.tz)
+        if now < starts or now > end:
+            raise GameError(
+                "Les placements ne sont possibles que du jeudi 17 h au dimanche minuit "
+                f"(semaine {week.week_id})."
+            )
+
+    def update_week_params(self, week_id: str, **fields) -> GameWeek:
+        allowed = {
+            "starts_at",
+            "invest_end",
+            "growth_factor",
+            "influence_min",
+            "influence_max",
+            "aum_per_trammer",
+            "status",
+        }
+        updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
+        if not updates:
+            return self._get_week(week_id)
+        sets = ", ".join(f"{k} = ?" for k in updates)
+        params = list(updates.values()) + [week_id]
+        self.db.execute_app(
+            f"UPDATE game_weeks SET {sets} WHERE week_id = ?",
+            tuple(params),
+        )
+        return self._get_week(week_id)
+
     # ---- missions / quests --------------------------------------------
     def publish_mission(self, owner_id: str, spec: MissionSpec) -> Entity:
         return self._publish_entity("mission", owner_id, spec)
@@ -163,30 +204,151 @@ class GameService:
         )
         return round_hop(row["total"] if row else 0.0)
 
-    def place_hops(self, trammer_id: str, entity_id: str, amount: float) -> Placement:
-        amount = round_hop(amount)
-        if amount <= HOP_MIN:
-            raise GameError("Le montant doit être positif (2 décimales).")
+    def list_placements(self, trammer_id: str, week_id: str | None = None) -> list[Placement]:
+        week = self.get_current_week() if week_id is None else self._get_week(week_id)
+        rows = self.db.query_app(
+            "SELECT week_id, trammer_id, entity_id, hop_amount, placed_at "
+            "FROM hop_placements WHERE week_id = ? AND trammer_id = ?",
+            (week.week_id, trammer_id),
+        )
+        return [
+            Placement(
+                week_id=r["week_id"],
+                trammer_id=r["trammer_id"],
+                entity_id=r["entity_id"],
+                hop_amount=r["hop_amount"],
+                placed_at=r["placed_at"],
+            )
+            for r in rows
+        ]
+
+    def _validate_entity_for_placement(self, trammer_id: str, entity_id: str):
         entity = self.db.query_app_one(
-            "SELECT owner_id FROM entities WHERE id = ?", (entity_id,)
+            "SELECT owner_id, title FROM entities WHERE id = ?", (entity_id,)
         )
         if entity is None:
             raise GameError("Entité introuvable.")
         if entity["owner_id"] == trammer_id:
-            raise GameError("On ne place pas d'influence dans sa propre entreprise.")
-        week = self.get_current_week()
-        already = self.placed_this_week(trammer_id, week.week_id)
-        if already + amount > HOP_MAX_INVEST_PER_WEEK:
             raise GameError(
-                f"Plafond hebdomadaire dépassé : {already:.2f} + {amount:.2f} > "
+                "On ne place pas d'influence dans sa propre mission, entreprise ou entité."
+            )
+        return entity
+
+    def _check_weekly_cap(self, trammer_id: str, week_id: str, new_total: float) -> None:
+        if new_total > HOP_MAX_INVEST_PER_WEEK:
+            already = self.placed_this_week(trammer_id, week_id)
+            raise GameError(
+                f"Plafond hebdomadaire dépassé : {already:.2f} → {new_total:.2f} > "
                 f"{HOP_MAX_INVEST_PER_WEEK:.0f} HOP."
             )
+
+    def set_placement(self, trammer_id: str, entity_id: str, amount: float) -> Placement | None:
+        """Set absolute HOP amount on an entity (0 removes the placement)."""
+        amount = round_hop(amount)
+        week = self.get_current_week()
+        self._ensure_invest_window(week)
+        self._validate_entity_for_placement(trammer_id, entity_id)
+        existing = self.db.query_app_one(
+            "SELECT hop_amount FROM hop_placements WHERE week_id = ? AND trammer_id = ? "
+            "AND entity_id = ?",
+            (week.week_id, trammer_id, entity_id),
+        )
+        prev = round_hop(existing["hop_amount"]) if existing else 0.0
+        total = self.placed_this_week(trammer_id, week.week_id) - prev + amount
+        self._check_weekly_cap(trammer_id, week.week_id, total)
+        if amount <= HOP_MIN:
+            self.db.execute_app(
+                "DELETE FROM hop_placements WHERE week_id = ? AND trammer_id = ? "
+                "AND entity_id = ?",
+                (week.week_id, trammer_id, entity_id),
+            )
+            return None
         self.db.execute_app(
             "INSERT INTO hop_placements (week_id, trammer_id, entity_id, hop_amount, placed_at) "
             "VALUES (?, ?, ?, ?, ?) "
             "ON CONFLICT(week_id, trammer_id, entity_id) "
-            "DO UPDATE SET hop_amount = hop_amount + excluded.hop_amount, placed_at = excluded.placed_at",
+            "DO UPDATE SET hop_amount = excluded.hop_amount, placed_at = excluded.placed_at",
             (week.week_id, trammer_id, entity_id, amount, utcnow()),
+        )
+        return Placement(
+            week_id=week.week_id,
+            trammer_id=trammer_id,
+            entity_id=entity_id,
+            hop_amount=amount,
+        )
+
+    def move_hops(
+        self, trammer_id: str, from_entity_id: str, to_entity_id: str, amount: float
+    ) -> Placement:
+        amount = round_hop(amount)
+        if amount <= HOP_MIN:
+            raise GameError("Le montant doit être positif (2 décimales).")
+        if from_entity_id == to_entity_id:
+            raise GameError("Source et destination identiques.")
+        week = self.get_current_week()
+        self._ensure_invest_window(week)
+        src = self.db.query_app_one(
+            "SELECT hop_amount FROM hop_placements WHERE week_id = ? AND trammer_id = ? "
+            "AND entity_id = ?",
+            (week.week_id, trammer_id, from_entity_id),
+        )
+        if src is None or round_hop(src["hop_amount"]) < amount:
+            raise GameError("Montant insuffisant sur la source.")
+        self._validate_entity_for_placement(trammer_id, to_entity_id)
+        new_src = round_hop(src["hop_amount"] - amount)
+        if new_src <= HOP_MIN:
+            self.db.execute_app(
+                "DELETE FROM hop_placements WHERE week_id = ? AND trammer_id = ? "
+                "AND entity_id = ?",
+                (week.week_id, trammer_id, from_entity_id),
+            )
+        else:
+            self.db.execute_app(
+                "UPDATE hop_placements SET hop_amount = ?, placed_at = ? "
+                "WHERE week_id = ? AND trammer_id = ? AND entity_id = ?",
+                (new_src, utcnow(), week.week_id, trammer_id, from_entity_id),
+            )
+        dest = self.db.query_app_one(
+            "SELECT hop_amount FROM hop_placements WHERE week_id = ? AND trammer_id = ? "
+            "AND entity_id = ?",
+            (week.week_id, trammer_id, to_entity_id),
+        )
+        new_dest = round_hop((dest["hop_amount"] if dest else 0.0) + amount)
+        self.db.execute_app(
+            "INSERT INTO hop_placements (week_id, trammer_id, entity_id, hop_amount, placed_at) "
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(week_id, trammer_id, entity_id) "
+            "DO UPDATE SET hop_amount = excluded.hop_amount, placed_at = excluded.placed_at",
+            (week.week_id, trammer_id, to_entity_id, new_dest, utcnow()),
+        )
+        return Placement(
+            week_id=week.week_id,
+            trammer_id=trammer_id,
+            entity_id=to_entity_id,
+            hop_amount=new_dest,
+        )
+
+    def place_hops(self, trammer_id: str, entity_id: str, amount: float) -> Placement:
+        amount = round_hop(amount)
+        if amount <= HOP_MIN:
+            raise GameError("Le montant doit être positif (2 décimales).")
+        week = self.get_current_week()
+        self._ensure_invest_window(week)
+        self._validate_entity_for_placement(trammer_id, entity_id)
+        already = self.placed_this_week(trammer_id, week.week_id)
+        self._check_weekly_cap(trammer_id, week.week_id, already + amount)
+        existing = self.db.query_app_one(
+            "SELECT hop_amount FROM hop_placements WHERE week_id = ? AND trammer_id = ? "
+            "AND entity_id = ?",
+            (week.week_id, trammer_id, entity_id),
+        )
+        new_amount = round_hop((existing["hop_amount"] if existing else 0.0) + amount)
+        self.db.execute_app(
+            "INSERT INTO hop_placements (week_id, trammer_id, entity_id, hop_amount, placed_at) "
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(week_id, trammer_id, entity_id) "
+            "DO UPDATE SET hop_amount = excluded.hop_amount, placed_at = excluded.placed_at",
+            (week.week_id, trammer_id, entity_id, new_amount, utcnow()),
         )
         return Placement(
             week_id=week.week_id,

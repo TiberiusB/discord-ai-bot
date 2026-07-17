@@ -15,9 +15,18 @@ llm:
 channels:
   log_mode: allowlist          # allowlist | denylist | all
   # Salons de Tramice721 + Salle des cartes (guild 1313325400079728734)
-  allowlist:
+  interact_allowlist:
     - "1313368950641393707"   # Salons de Tramice721
     - "1313860231939494001"   # Salle des cartes
+    - "1318468816065265674"   # Taches Mission
+    - "1313756568332009512"   # Passerelle
+  log_allowlist:
+    - "1313368950641393707"   # Salons de Tramice721
+    - "1313860231939494001"   # Salle des cartes
+    - "1318468816065265674"   # Taches Mission
+    - "1313756568332009512"   # Passerelle
+    - "1313861838701727754"   # ToDo channel (log-only; /todo still works)
+
   denylist: []
   summary_channel_id: "1313368950641393707"
 

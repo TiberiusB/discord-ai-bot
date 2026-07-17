@@ -79,12 +79,12 @@ class EcosystemService:
         row = self.db.query_app_one("SELECT * FROM entities WHERE id = ?", (entity_id,))
         return _row_to_entity(row) if row else None
 
-    def get_entity_dashboard(self, entity_id: str) -> dict:
+    def get_entity_dashboard(self, entity_id: str, week_id: str | None = None) -> dict:
         entity = self.get_entity(entity_id)
         if entity is None:
             return {}
         updates = self.db.query_app(
-            "SELECT * FROM entity_updates WHERE entity_id = ? ORDER BY created_at DESC LIMIT 10",
+            "SELECT * FROM entity_updates WHERE entity_id = ? ORDER BY created_at DESC LIMIT 20",
             (entity_id,),
         )
         support = self.db.query_app_one(
@@ -92,12 +92,49 @@ class EcosystemService:
             "FROM hop_placements WHERE entity_id = ?",
             (entity_id,),
         )
+        week_filter = ""
+        params: list = [entity_id]
+        if week_id:
+            week_filter = " AND week_id = ?"
+            params.append(week_id)
+        placements = self.db.query_app(
+            "SELECT p.*, e.title AS entity_title FROM hop_placements p "
+            "JOIN entities e ON e.id = p.entity_id "
+            f"WHERE p.entity_id = ?{week_filter} ORDER BY placed_at DESC",
+            tuple(params),
+        )
+        recognitions = self.db.query_app(
+            "SELECT * FROM hop_recognitions WHERE entity_id = ? ORDER BY created_at DESC LIMIT 10",
+            (entity_id,),
+        )
         return {
             "entity": entity,
             "backers": support["backers"] if support else 0,
             "hops_placed": support["hops"] if support else 0.0,
             "updates": [dict(u) for u in updates],
+            "placements": [dict(p) for p in placements],
+            "recognitions": [dict(r) for r in recognitions],
         }
+
+    def add_entity_update(self, entity_id: str, author_id: str, body: str) -> dict:
+        if not body.strip():
+            raise ValueError("Commentaire vide.")
+        if self.get_entity(entity_id) is None:
+            raise ValueError("Entité introuvable.")
+        now = utcnow()
+        cur = self.db.execute_app(
+            "INSERT INTO entity_updates (entity_id, author_id, body, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            (entity_id, author_id, body.strip(), now),
+        )
+        self.db.execute_app(
+            "UPDATE entities SET updated_at = ? WHERE id = ?",
+            (now, entity_id),
+        )
+        row = self.db.query_app_one(
+            "SELECT * FROM entity_updates WHERE id = ?", (cur.lastrowid,)
+        )
+        return dict(row) if row else {}
 
     def list_mondo(
         self, view: str, trammer_id: str | None, filters: MondoFilters
@@ -158,4 +195,32 @@ class EcosystemService:
         return {
             "entities_by_kind": {r["kind"]: r["n"] for r in counts},
             "trammers": totals["trammers"] if totals else 0,
+        }
+
+    def get_social_stats(self) -> dict:
+        """Aggregate salon vs DM activity from the message log."""
+        salon_users = self.db.query_history_one(
+            "SELECT COUNT(DISTINCT user_id) AS n FROM messages "
+            "WHERE deleted = 0 AND is_dm = 0"
+        )
+        dm_users = self.db.query_history_one(
+            "SELECT COUNT(DISTINCT user_id) AS n FROM messages "
+            "WHERE deleted = 0 AND is_dm = 1"
+        )
+        salon_msgs = self.db.query_history_one(
+            "SELECT COUNT(*) AS n FROM messages WHERE deleted = 0 AND is_dm = 0"
+        )
+        dm_msgs = self.db.query_history_one(
+            "SELECT COUNT(*) AS n FROM messages WHERE deleted = 0 AND is_dm = 1"
+        )
+        bot_prefix = self.db.query_history_one(
+            "SELECT COUNT(*) AS n FROM messages WHERE deleted = 0 AND "
+            "(content LIKE '!ai%' OR content LIKE '%<@%')"
+        )
+        return {
+            "distinct_salon_users": salon_users["n"] if salon_users else 0,
+            "distinct_dm_users": dm_users["n"] if dm_users else 0,
+            "salon_messages": salon_msgs["n"] if salon_msgs else 0,
+            "dm_messages": dm_msgs["n"] if dm_msgs else 0,
+            "bot_addressed_estimate": bot_prefix["n"] if bot_prefix else 0,
         }

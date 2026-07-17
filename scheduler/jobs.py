@@ -134,7 +134,7 @@ def build_scheduler(bot) -> AsyncIOScheduler:
             f"Budget d'influence indicatif : ~{budget:.2f} HOP par trammer "
             f"(min {week.influence_min:.0f}, max {week.influence_max:.0f}).\n"
             f"Les entreprises peuvent publier leurs Missions (`/mission`), "
-            f"et chacun·e peut placer son influence (`/place`)."
+            f"et chacun·e peut placer son influence (`/support`)."
         )
         if settings.summary_channel_id:
             await bot.post_to_channel(settings.summary_channel_id, msg)
@@ -196,6 +196,24 @@ def build_scheduler(bot) -> AsyncIOScheduler:
         _wrap_job("game_week_close", game_week_close),
         CronTrigger(day_of_week="sun", hour=23, minute=59, timezone=tz),
         id="game_week_close",
+    )
+
+    async def propose_echoes(fields: dict) -> None:
+        log.info("job:propose_echoes start")
+        if services is None or services.matchmaking is None:
+            fields["skipped"] = True
+            return
+        if not settings.get("features.matchmaking", True):
+            fields["skipped"] = True
+            return
+        n = services.matchmaking.propose_echoes_for_all(limit_per_trammer=3)
+        fields["echoes_created"] = n
+        log.info("job:propose_echoes created %d echoes", n)
+
+    scheduler.add_job(
+        _wrap_job("propose_echoes", propose_echoes),
+        CronTrigger(minute=0, timezone=tz),
+        id="propose_echoes",
     )
 
     async def capability_scan(fields: dict) -> None:

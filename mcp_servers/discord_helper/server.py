@@ -64,5 +64,23 @@ def fetch_channel_history(channel_id: str, limit: int = 50, since_iso: str = "")
     ]
 
 
+@mcp.tool()
+def get_guild_metadata() -> dict:
+    """Métadonnées du serveur (cache capabilities.json)."""
+    from bot.capabilities import load_capabilities_snapshot
+
+    snap = load_capabilities_snapshot(_settings)
+    if not snap:
+        return {"error": "Aucun snapshot disponible."}
+    return {
+        "guild_id": snap.get("guild_id"),
+        "guild_name": snap.get("guild_name"),
+        "member_count": snap.get("member_count"),
+        "channel_count": snap.get("channel_count"),
+        "roles": snap.get("roles", [])[:20],
+        "scanned_at": snap.get("scanned_at"),
+    }
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")

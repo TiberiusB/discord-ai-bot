@@ -8,6 +8,13 @@ from ai.rag.embeddings import get_vector_store
 
 log = logging.getLogger("tramice.rag.privacy")
 
+PUBLIC_COLLECTIONS = ("docs", "web")
+
+
+def public_collections() -> tuple[str, ...]:
+    """Collections safe for public /mondo knowledge browse (never DM history)."""
+    return PUBLIC_COLLECTIONS
+
 
 def delete_user_history_embeddings(settings, user_id: str) -> int:
     """Remove ``history`` collection vectors tagged with ``user_id`` metadata."""

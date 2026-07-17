@@ -289,12 +289,37 @@ CREATE TABLE IF NOT EXISTS web_sources (
     last_error       TEXT,
     active           INTEGER NOT NULL DEFAULT 1
 );
+
+-- Channel-scoped conversation mode (/mode) and shared todos (/todo)
+CREATE TABLE IF NOT EXISTS channel_modes (
+    channel_id    TEXT PRIMARY KEY,
+    mode          TEXT NOT NULL DEFAULT 'listen',
+    updated_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS channel_todos (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel_id    TEXT NOT NULL,
+    body          TEXT NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'todo',
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_channel_todos_channel ON channel_todos(channel_id);
 """
 
 
 def utcnow() -> str:
     """ISO-8601 UTC timestamp (spec stores times as ISO strings)."""
     return datetime.now(timezone.utc).isoformat()
+
+
+def ensure_column(conn: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
+    """Add a column if missing (lightweight migration for playtest DBs)."""
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    if any(r[1] == column for r in rows):
+        return
+    conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
 
 class Database:
@@ -317,6 +342,7 @@ class Database:
         with self._lock:
             self.history.executescript(HISTORY_SCHEMA)
             self.app.executescript(APP_SCHEMA)
+            ensure_column(self.app, "trammers", "profile_json", "TEXT")
             self.history.commit()
             self.app.commit()
 
@@ -363,6 +389,22 @@ class Database:
             "DELETE FROM user_model_prefs WHERE discord_user_id = ?",
             (user_id,),
         ).rowcount
+
+    # ---- channel conversation mode (/mode) ---------------------------
+    def get_channel_mode(self, channel_id: str) -> str:
+        row = self.query_app_one(
+            "SELECT mode FROM channel_modes WHERE channel_id = ?",
+            (channel_id,),
+        )
+        return row["mode"] if row else "listen"
+
+    def set_channel_mode(self, channel_id: str, mode: str) -> None:
+        self.execute_app(
+            "INSERT INTO channel_modes (channel_id, mode, updated_at) "
+            "VALUES (?, ?, ?) ON CONFLICT(channel_id) DO UPDATE SET "
+            "mode = excluded.mode, updated_at = excluded.updated_at",
+            (channel_id, mode, utcnow()),
+        )
 
     # ---- curated web sources (RAG) ------------------------------------
     def list_web_sources(self, active_only: bool = True) -> list[sqlite3.Row]:

@@ -119,3 +119,39 @@ class CoordinationService:
                 (team_id, member_id, now),
             )
         return Team(id=team_id, name=name, member_ids=list(member_ids), created_at=now)
+
+    # ---- channel todos (/todo) ----------------------------------------
+    def list_todos(self, channel_id: str) -> list[dict]:
+        rows = self.db.query_app(
+            "SELECT * FROM channel_todos WHERE channel_id = ? ORDER BY "
+            "CASE status WHEN 'todo' THEN 0 WHEN 'in_progress' THEN 1 ELSE 2 END, id",
+            (channel_id,),
+        )
+        return [dict(r) for r in rows]
+
+    def add_todo(self, channel_id: str, body: str) -> dict:
+        now = utcnow()
+        cur = self.db.execute_app(
+            "INSERT INTO channel_todos (channel_id, body, status, created_at, updated_at) "
+            "VALUES (?, ?, 'todo', ?, ?)",
+            (channel_id, body.strip(), now, now),
+        )
+        row = self.db.query_app_one(
+            "SELECT * FROM channel_todos WHERE id = ?", (cur.lastrowid,)
+        )
+        return dict(row) if row else {}
+
+    def set_todo_status(self, todo_id: int, status: str) -> bool:
+        if status not in {"todo", "in_progress", "done"}:
+            raise ValueError(f"Statut invalide : {status}")
+        cur = self.db.execute_app(
+            "UPDATE channel_todos SET status = ?, updated_at = ? WHERE id = ?",
+            (status, utcnow(), todo_id),
+        )
+        return cur.rowcount > 0
+
+    def delete_todo(self, todo_id: int) -> bool:
+        cur = self.db.execute_app(
+            "DELETE FROM channel_todos WHERE id = ?", (todo_id,)
+        )
+        return cur.rowcount > 0

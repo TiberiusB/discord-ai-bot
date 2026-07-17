@@ -146,6 +146,7 @@ def build_responder(settings, db, history, ollama, services=None):
             ollama,
             tools_provider=tools_provider,
             mcp_loader=load_mcp_tools,
+            services=services,
         )
     except Exception:  # noqa: BLE001
         log.exception("Falling back to DirectResponder (agent unavailable)")

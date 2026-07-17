@@ -133,6 +133,17 @@ class TramiceBot(commands.Bot):
         user_roles = {str(r.id) for r in getattr(interaction.user, "roles", [])}
         return bool(admin_roles & user_roles)
 
+    def has_architecture_role(self, interaction: discord.Interaction) -> bool:
+        if interaction.guild is None:
+            return False
+        if interaction.guild.owner_id == interaction.user.id:
+            return True
+        arch_ids = set(self.settings.architecture_role_ids)
+        user_roles = getattr(interaction.user, "roles", [])
+        if arch_ids:
+            return any(str(r.id) in arch_ids for r in user_roles)
+        return any(r.name == "Architecture" for r in user_roles)
+
     # ---- lifecycle -----------------------------------------------------
     async def setup_hook(self) -> None:
         from bot.commands import register_commands
@@ -361,10 +372,7 @@ class TramiceBot(commands.Bot):
         channel_id = str(message.channel.id)
         guild_id = str(message.guild.id) if message.guild else None
 
-        if not is_dm and not channel_allowed(self.settings, channel_id, is_dm):
-            return
-
-        # Log message to community memory (MEM-1) before deciding to reply.
+        # Log message to community memory (MEM-1) for log_allowlist channels.
         if should_log(self.settings, channel_id, is_dm) and message.content:
             try:
                 self.history.log_message(
@@ -387,9 +395,32 @@ class TramiceBot(commands.Bot):
         detected = detect_trigger(message, self.user, self.settings.prefix)
         if detected is None:
             return
+
+        if not channel_allowed(self.settings, channel_id, is_dm):
+            return
+        from bot.capabilities import can, load_capabilities_snapshot
+
+        snap = load_capabilities_snapshot(self.settings)
+        if snap and not can(snap, "send_messages", channel_id):
+            return
+
         trigger, content = detected
         if not content:
             content = "Bonjour !"
+
+        identity = getattr(self.services, "identity", None) if self.services else None
+        if identity is not None and self.settings.get("features.matchmaking", True):
+            from bot.volio_capture import capture_volio_from_message
+
+            captured = capture_volio_from_message(content)
+            if captured:
+                kind, label = captured
+                try:
+                    identity.add_volio_entry(
+                        str(message.author.id), kind, label, visibility="network"
+                    )
+                except Exception:  # noqa: BLE001
+                    log.exception("volio capture failed")
 
         req = make_request(
             guild_id=guild_id,

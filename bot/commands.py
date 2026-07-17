@@ -22,7 +22,7 @@ PERM_DENIED = "Je n'ai pas la permission pour cette action."
 
 _MODEL_ADMIN_INFO = (
     "ℹ️ `/model` change le modèle par défaut pour **toute la communauté** "
-    "(sauf les tramarades ayant choisi le leur avec `/modele`). Le choix "
+    "(sauf les tramarades ayant choisi le leur avec `/my-model`). Le choix "
     "n'est pas persisté : il revient à `config.yaml` au redémarrage."
 )
 
@@ -33,7 +33,7 @@ _MODEL_CAUTION = (
     "lentement, et certains modèles suivent moins bien les commandes d'outils. "
     "Ton choix **ne concerne que tes échanges**, reste en mémoire et s'applique "
     "dès ton prochain message ; notre fil de conversation est conservé. Reviens "
-    "au modèle par défaut à tout moment avec `/modele nom:defaut`."
+    "au modèle par défaut à tout moment avec `/my-model nom:defaut`."
 )
 
 _RESET_ALIASES = {"defaut", "défaut", "default", "auto", "reset", "0"}
@@ -106,7 +106,7 @@ async def _tools_warning(ollama, choice: str) -> str:
         "avec ma personnalité et ma mémoire, mais sans mes outils (recherche "
         "dans les connaissances, volios, événements…). Pour ces fonctions, "
         "choisis un modèle compatible (ex. `qwen2.5:7b-instruct`) ou reviens "
-        "au défaut avec `/modele nom:defaut`."
+        "au défaut avec `/my-model nom:defaut`."
     )
 
 
@@ -128,7 +128,7 @@ async def _apply_admin_model(
     await interaction.followup.send(
         f"Nouvelle âme par défaut chargée : **{name}**. 🌱\n"
         "S'applique à tous, sauf aux tramarades ayant un modèle personnel "
-        "(`/modele`). Non persisté : retour à `config.yaml` au redémarrage.",
+        "(`/my-model`). Non persisté : retour à `config.yaml` au redémarrage.",
         ephemeral=True,
     )
 
@@ -528,13 +528,13 @@ def register_commands(bot) -> None:
         await _apply_admin_model(bot, interaction, name.strip(), available)
 
     @tree.command(
-        name="modele",
+        name="my-model",
         description="Choisir ton modèle d'IA personnel (n'affecte que tes échanges).",
     )
     @app_commands.describe(
         nom="Nom du modèle (vide pour le menu ; « defaut » pour réinitialiser)"
     )
-    async def modele(interaction: discord.Interaction, nom: str | None = None):
+    async def my_model(interaction: discord.Interaction, nom: str | None = None):
         await interaction.response.defer(thinking=True, ephemeral=True)
         user_id = str(interaction.user.id)
         embed_model = bot.settings.embed_model
@@ -554,7 +554,7 @@ def register_commands(bot) -> None:
             body = (
                 f"{head}\n\nModèles disponibles :\n{listing}\n\n"
                 "**Choisis un modèle dans le menu ci-dessous** "
-                "(ou tape `/modele nom:<modèle>` / `/modele nom:defaut`).\n\n"
+                "(ou tape `/my-model nom:<modèle>` / `/my-model nom:defaut`).\n\n"
                 f"{_MODEL_CAUTION}"
             )
             current = current_pref or default_model
@@ -595,8 +595,8 @@ def register_commands(bot) -> None:
             default_model=default_model,
         )
 
-    @modele.autocomplete("nom")
-    async def modele_autocomplete(
+    @my_model.autocomplete("nom")
+    async def my_model_autocomplete(
         interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
         try:
@@ -621,11 +621,9 @@ def register_commands(bot) -> None:
     register_post_mvp_commands(bot)
     if bot.settings.get("features.game_simulation", True):
         register_m5_commands(bot)
+    register_extra_commands(bot)
     log.info(
-        "Registered slash commands: /ask, /forgetme, /reindex, /web-source, /model, /modele, "
-        "/health, /say, /volio, /mondo, /echoes, /event, /summarize, /normes, "
-        "/norm-set, /signalement, /identite, /thread, /sondage, /son, "
-        "/mission, /place, /vote"
+        "Registered slash commands including /norms, /identity, /support, /mode, /todo, /game-week"
     )
 
 
@@ -689,15 +687,85 @@ def register_m4_commands(bot) -> None:  # noqa: C901 - cohesive command block
 
     # ---- /mondo (ecosystem) -------------------------------------------
     @tree.command(name="mondo", description="Explorer le Mondo (carte de la Guilde).")
-    @app_commands.describe(view="perso ou cosmo (défaut)", kind="type d'entité (facultatif)")
-    async def mondo(interaction: discord.Interaction, view: str = "cosmo", kind: str | None = None):
+    @app_commands.describe(
+        view="perso, cosmo, stats, knowledge ou entity",
+        kind="type d'entité (facultatif)",
+        query="Recherche (knowledge) ou identifiant entité (entity)",
+    )
+    async def mondo(
+        interaction: discord.Interaction,
+        view: str = "cosmo",
+        kind: str | None = None,
+        query: str | None = None,
+    ):
         ecosystem = _svc("ecosystem")
         if ecosystem is None:
             await interaction.response.send_message("Service indisponible.", ephemeral=True)
             return
+        view = view.lower().strip()
+        if view == "stats":
+            stats = ecosystem.get_social_stats()
+            body = (
+                f"**Statistiques sociales :**\n"
+                f"- Trammers distincts (salons) : {stats['distinct_salon_users']}\n"
+                f"- Trammers distincts (DM) : {stats['distinct_dm_users']}\n"
+                f"- Messages salons : {stats['salon_messages']}\n"
+                f"- Messages DM : {stats['dm_messages']}\n"
+                f"- Interactions bot (est.) : {stats['bot_addressed_estimate']}"
+            )
+            await interaction.response.send_message(body)
+            return
+        if view == "knowledge":
+            knowledge = getattr(services, "knowledge", None) if services else None
+            if knowledge is None:
+                await interaction.response.send_message(
+                    "Service de connaissances indisponible.", ephemeral=True
+                )
+                return
+            if query:
+                chunks = knowledge.search(query, collections=["docs", "web"], k=5)
+                if not chunks:
+                    await interaction.response.send_message(
+                        "Aucun extrait public trouvé.", ephemeral=True
+                    )
+                    return
+                body = "\n\n".join(f"[{c.source}] {c.text[:500]}" for c in chunks)
+            else:
+                export_dir = bot.settings.data_dir / "public_rag"
+                if export_dir.exists():
+                    files = sorted(export_dir.glob("*.md"))[-5:]
+                    body = "**Exports publics récents :**\n" + "\n".join(
+                        f"- {f.name}" for f in files
+                    ) or "(aucun)"
+                else:
+                    body = "Aucun export public. Les admins peuvent lancer `/reindex`."
+            await interaction.response.send_message(body[:1900])
+            return
+        if view == "entity":
+            if not query:
+                await interaction.response.send_message(
+                    "Précise `query` avec l'id ou le titre de l'entité.", ephemeral=True
+                )
+                return
+            resolved = _resolve_entity(bot, query)
+            if resolved is None:
+                await interaction.response.send_message("Entité introuvable.", ephemeral=True)
+                return
+            dash = ecosystem.get_entity_dashboard(resolved[0])
+            ent = dash.get("entity")
+            lines = [
+                f"**{ent.title}** ({ent.kind}) · phase {ent.phase}",
+                f"HOP : {dash.get('hops_placed', 0):.2f} placés · {ent.hop_requested:.2f} demandés",
+                f"Commentaires : {len(dash.get('updates', []))}",
+            ]
+            for u in dash.get("updates", [])[:5]:
+                lines.append(f"- {u.get('body', '')[:120]}")
+            await interaction.response.send_message("\n".join(lines))
+            return
         from services.ecosystem import MondoFilters
 
-        view = view if view in {"perso", "cosmo"} else "cosmo"
+        if view not in {"perso", "cosmo"}:
+            view = "cosmo"
         entities = ecosystem.list_mondo(
             view, str(interaction.user.id) if view == "perso" else None,
             MondoFilters(kind=kind or None, limit=12),
@@ -708,7 +776,7 @@ def register_m4_commands(bot) -> None:  # noqa: C901 - cohesive command block
             )
             return
         body = "\n".join(
-            f"- [{e.kind}] **{e.title}** · phase {e.phase} · {e.hop_requested:.2f} HOP demandés"
+            f"- [{e.kind}] **{e.title}** · phase {e.phase} · {e.hop_requested:.2f} HOPs demandés"
             for e in entities
         )
         await interaction.response.send_message(f"**Mondo ({view}) :**\n{body}")
@@ -836,8 +904,8 @@ def register_m4_commands(bot) -> None:  # noqa: C901 - cohesive command block
         )
 
     # ---- /normes + /norm-set (governance) -----------------------------
-    @tree.command(name="normes", description="Afficher les normes sociales en vigueur.")
-    async def normes(interaction: discord.Interaction):
+    @tree.command(name="norms", description="Afficher les normes sociales en vigueur.")
+    async def norms(interaction: discord.Interaction):
         governance = _svc("governance")
         if governance is None:
             await interaction.response.send_message("Service indisponible.", ephemeral=True)
@@ -848,7 +916,7 @@ def register_m4_commands(bot) -> None:  # noqa: C901 - cohesive command block
             f"**Normes sociales (lisibles par tous) :**\n{body}"
         )
 
-    @tree.command(name="norm-set", description="[Admin] Modifier une norme sociale.")
+    @tree.command(name="set-norm", description="[Admin] Modifier une norme sociale.")
     @app_commands.describe(key="Clé de la norme", value="true ou false")
     async def norm_set(interaction: discord.Interaction, key: str, value: bool):
         if not bot.is_admin(interaction):
@@ -865,13 +933,13 @@ def register_m4_commands(bot) -> None:  # noqa: C901 - cohesive command block
         )
 
     # ---- /signalement (governance) ------------------------------------
-    @tree.command(name="signalement", description="Faire un signalement gradué (confidentiel).")
+    @tree.command(name="signal", description="Faire un signalement gradué (confidentiel).")
     @app_commands.describe(
         level="1=malaise, 2=manquement, 3=danger immédiat",
         description="Description du signalement",
         target="Personne concernée (facultatif)",
     )
-    async def signalement(
+    async def signal(
         interaction: discord.Interaction,
         level: int,
         description: str,
@@ -915,7 +983,7 @@ def register_post_mvp_commands(bot) -> None:
         return getattr(services, name, None) if services else None
 
     @tree.command(
-        name="identite",
+        name="identity",
         description="Gérer les noms connus d'un membre ou lier des identités.",
     )
     @app_commands.describe(
@@ -923,7 +991,7 @@ def register_post_mvp_commands(bot) -> None:
         membre="Membre concerné (défaut : toi)",
         autre="Second membre (pour lier)",
     )
-    async def identite(
+    async def identity(
         interaction: discord.Interaction,
         action: str = "noms",
         membre: discord.Member | None = None,
@@ -1010,7 +1078,7 @@ def register_post_mvp_commands(bot) -> None:
             f"Fil créé : {thread.mention}", ephemeral=True
         )
 
-    @tree.command(name="sondage", description="Créer un sondage dans ce salon.")
+    @tree.command(name="poll", description="Créer un sondage dans ce salon.")
     @app_commands.describe(
         question="Question du sondage",
         option1="Option 1",
@@ -1018,7 +1086,7 @@ def register_post_mvp_commands(bot) -> None:
         option3="Option 3 (facultatif)",
         option4="Option 4 (facultatif)",
     )
-    async def sondage(
+    async def poll(
         interaction: discord.Interaction,
         question: str,
         option1: str,
@@ -1100,7 +1168,7 @@ def register_m5_commands(bot) -> None:  # noqa: C901
         action="publish ou list (défaut)",
         title="Titre de la Mission",
         description="Description / besoins",
-        hop="HOP demandés",
+        hop="HOPs demandés",
         location="Lieu (facultatif)",
     )
     async def mission(
@@ -1134,8 +1202,8 @@ def register_m5_commands(bot) -> None:  # noqa: C901
                 await interaction.response.send_message(str(exc), ephemeral=True)
                 return
             await interaction.response.send_message(
-                f"Mission publiée : **{entity.title}** ({entity.hop_requested:.2f} HOP "
-                f"demandés). Les tramarades peuvent investir avec `/place`. 🚀"
+                f"Mission publiée : **{entity.title}** ({entity.hop_requested:.2f} HOPs "
+                f"demandés). Les tramarades peuvent investir avec `/support`. 🚀"
             )
             return
         if ecosystem is None:
@@ -1148,48 +1216,138 @@ def register_m5_commands(bot) -> None:  # noqa: C901
             await interaction.response.send_message("Aucune Mission active.", ephemeral=True)
             return
         body = "\n".join(
-            f"- **{e.title}** · {e.hop_allocated:.2f}/{e.hop_requested:.2f} HOP · `{e.id[:8]}`"
+            f"- **{e.title}** · {e.hop_allocated:.2f}/{e.hop_requested:.2f} 'HOP(s)' · `{e.id[:8]}`"
             for e in missions
         )
         await interaction.response.send_message(f"**Missions actives :**\n{body}")
 
-    # ---- /place (game) ------------------------------------------------
-    @tree.command(name="place", description="Placer ton influence (HOP) sur une Mission.")
-    @app_commands.describe(entity="Titre ou identifiant de l'entité", amount="Montant de HOP")
-    async def place(interaction: discord.Interaction, entity: str, amount: float):
+    # ---- /support (game) ----------------------------------------------
+    @tree.command(name="support", description="Placer, retirer ou déplacer ton influence (HOP).")
+    @app_commands.describe(
+        action="place, withdraw, move ou list",
+        entity="Entité cible (place/withdraw)",
+        amount="Montant de HOP",
+        from_entity="Source (move)",
+        to_entity="Destination (move)",
+    )
+    async def support(
+        interaction: discord.Interaction,
+        action: str = "list",
+        entity: str | None = None,
+        amount: float | None = None,
+        from_entity: str | None = None,
+        to_entity: str | None = None,
+    ):
         game = _svc("game")
         if game is None:
             await interaction.response.send_message("Le jeu est désactivé.", ephemeral=True)
             return
-        resolved = _resolve_entity(bot, entity)
-        if resolved is None:
-            await interaction.response.send_message(
-                "Je n'ai pas trouvé cette entité. Vérifie le titre ou l'identifiant "
-                "(voir `/mission`).",
-                ephemeral=True,
-            )
-            return
-        entity_id, entity_title = resolved
         from bot.ui import ConfirmView
         from services.game import GameError
 
-        async def _confirm(inter: discord.Interaction):
+        uid = str(interaction.user.id)
+        action = action.lower().strip()
+
+        if action == "list":
+            week = game.get_current_week()
+            placements = game.list_placements(uid, week.week_id)
+            if not placements:
+                await interaction.response.send_message(
+                    f"Aucun placement cette semaine ({week.week_id}).", ephemeral=True
+                )
+                return
+            lines = []
+            for p in placements:
+                ent = bot.db.query_app_one(
+                    "SELECT title FROM entities WHERE id = ?", (p.entity_id,)
+                )
+                title = ent["title"] if ent else p.entity_id[:8]
+                lines.append(f"- **{title}** : {p.hop_amount:.2f} HOP")
+            total = game.placed_this_week(uid, week.week_id)
+            await interaction.response.send_message(
+                f"**Tes placements ({week.week_id}) — total {total:.2f} HOP :**\n"
+                + "\n".join(lines)
+            )
+            return
+
+        if action == "move":
+            if not from_entity or not to_entity or amount is None:
+                await interaction.response.send_message(
+                    "Précise `from_entity`, `to_entity` et `amount`.", ephemeral=True
+                )
+                return
+            src = _resolve_entity(bot, from_entity)
+            dst = _resolve_entity(bot, to_entity)
+            if src is None or dst is None:
+                await interaction.response.send_message("Entité introuvable.", ephemeral=True)
+                return
+
+            async def _confirm_move(inter: discord.Interaction):
+                try:
+                    game.move_hops(uid, src[0], dst[0], amount)
+                except GameError as exc:
+                    await inter.followup.send(f"Impossible : {exc}", ephemeral=True)
+                    return
+                audit(uid, "move_hops", args={"from": src[0], "to": dst[0], "amount": amount})
+                await inter.followup.send(
+                    f"Déplacement confirmé : **{amount:.2f} HOP** de « {src[1]} » "
+                    f"vers « {dst[1]} ». 🌟"
+                )
+
+            view = ConfirmView(interaction.user.id, _confirm_move)
+            await interaction.response.send_message(
+                f"Déplacer **{amount:.2f} HOP** de « {src[1]} » vers « {dst[1]} » ?",
+                view=view,
+            )
+            return
+
+        if not entity or amount is None:
+            await interaction.response.send_message(
+                "Précise `entity` et `amount`.", ephemeral=True
+            )
+            return
+        resolved = _resolve_entity(bot, entity)
+        if resolved is None:
+            await interaction.response.send_message(
+                "Entité introuvable (voir `/mission`).", ephemeral=True
+            )
+            return
+        entity_id, entity_title = resolved
+
+        if action == "withdraw":
+            async def _confirm_withdraw(inter: discord.Interaction):
+                try:
+                    game.set_placement(uid, entity_id, 0.0)
+                except GameError as exc:
+                    await inter.followup.send(f"Impossible : {exc}", ephemeral=True)
+                    return
+                audit(uid, "withdraw_hops", args={"entity": entity_id})
+                await inter.followup.send(
+                    f"Retrait confirmé sur « {entity_title} ». 🌾"
+                )
+
+            view = ConfirmView(interaction.user.id, _confirm_withdraw)
+            await interaction.response.send_message(
+                f"Retirer ton placement sur « {entity_title} » ?", view=view
+            )
+            return
+
+        async def _confirm_place(inter: discord.Interaction):
             try:
-                placement = game.place_hops(str(interaction.user.id), entity_id, amount)
+                placement = game.place_hops(uid, entity_id, amount)
             except GameError as exc:
                 await inter.followup.send(f"Impossible : {exc}", ephemeral=True)
                 return
-            audit(str(interaction.user.id), "place_hops",
-                  args={"entity": entity_id, "amount": amount})
+            audit(uid, "place_hops", args={"entity": entity_id, "amount": amount})
             await inter.followup.send(
                 f"Placement confirmé : **{placement.hop_amount:.2f} HOP** sur "
                 f"« {entity_title} ». 🌟",
             )
 
-        view = ConfirmView(interaction.user.id, _confirm)
+        view = ConfirmView(interaction.user.id, _confirm_place)
         await interaction.response.send_message(
-            f"Tu souhaites placer **{amount:.2f} HOP** sur « {entity_title} ». "
-            f"Confirmes-tu ? (Je propose, tu disposes.)",
+            f"Placer **{amount:.2f} HOP** sur « {entity_title} » ? "
+            f"(Je propose, tu disposes.)",
             view=view,
         )
 
@@ -1265,6 +1423,186 @@ def register_m5_commands(bot) -> None:  # noqa: C901
             f"- « {v.title} » · seuil {int(v.threshold*100)}% · `{v.id[:8]}`" for v in votes
         )
         await interaction.response.send_message(f"**Votes ouverts :**\n{body}")
+
+
+def register_extra_commands(bot) -> None:
+    """Additional commands: /mode, /todo, /game-week."""
+    tree = bot.tree
+    services = bot.services
+
+    def _svc(name):
+        return getattr(services, name, None) if services else None
+
+    from ai.agent.harness import CONVERSATION_MODES, mode_label, normalize_mode
+
+    mode_choices = [
+        app_commands.Choice(name=label, value=key)
+        for key, label in CONVERSATION_MODES.items()
+    ]
+
+    @tree.command(
+        name="mode",
+        description="Changer le mode de conversation de Tramice dans ce salon ou DM.",
+    )
+    @app_commands.describe(mode="Mode de conversation")
+    @app_commands.choices(mode=mode_choices)
+    async def mode_cmd(
+        interaction: discord.Interaction,
+        mode: app_commands.Choice[str] | None = None,
+    ):
+        if mode is None:
+            current = bot.db.get_channel_mode(str(interaction.channel_id))
+            await interaction.response.send_message(
+                f"Mode actuel dans ce fil : **{mode_label(current)}** (`{current}`).\n"
+                "Choisis un mode via le menu de la commande `/mode`.",
+                ephemeral=True,
+            )
+            return
+        key = normalize_mode(mode.value)
+        bot.db.set_channel_mode(str(interaction.channel_id), key)
+        audit(str(interaction.user.id), "set_mode", args={"mode": key})
+        await interaction.response.send_message(
+            f"Mode mis à jour : **{mode_label(key)}**. 🌿", ephemeral=True
+        )
+
+    @tree.command(name="todo", description="Liste de tâches partagée du salon.")
+    @app_commands.describe(
+        action="list, add, delete ou status",
+        text="Texte de la tâche (add)",
+        todo_id="Identifiant (delete/status)",
+        status="todo, in_progress ou done (status)",
+    )
+    async def todo_cmd(
+        interaction: discord.Interaction,
+        action: str = "list",
+        text: str | None = None,
+        todo_id: int | None = None,
+        status: str | None = None,
+    ):
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "Les todos sont par salon du serveur.", ephemeral=True
+            )
+            return
+        coordination = _svc("coordination")
+        if coordination is None:
+            await interaction.response.send_message("Service indisponible.", ephemeral=True)
+            return
+        channel_id = str(interaction.channel_id)
+        action = action.lower().strip()
+        if action == "add":
+            if not text or not text.strip():
+                await interaction.response.send_message("Précise `text`.", ephemeral=True)
+                return
+            row = coordination.add_todo(channel_id, text)
+            await interaction.response.send_message(
+                f"Tâche #{row.get('id')} ajoutée.", ephemeral=True
+            )
+            return
+        if action == "delete":
+            if todo_id is None:
+                await interaction.response.send_message("Précise `todo_id`.", ephemeral=True)
+                return
+            ok = coordination.delete_todo(todo_id)
+            await interaction.response.send_message(
+                "Supprimée." if ok else "Tâche introuvable.", ephemeral=True
+            )
+            return
+        if action == "status":
+            if todo_id is None or not status:
+                await interaction.response.send_message(
+                    "Précise `todo_id` et `status`.", ephemeral=True
+                )
+                return
+            try:
+                ok = coordination.set_todo_status(todo_id, status)
+            except ValueError as exc:
+                await interaction.response.send_message(str(exc), ephemeral=True)
+                return
+            await interaction.response.send_message(
+                "Statut mis à jour." if ok else "Tâche introuvable.", ephemeral=True
+            )
+            return
+        items = coordination.list_todos(channel_id)
+        if not items:
+            await interaction.response.send_message(
+                "Aucune tâche dans ce salon.", ephemeral=True
+            )
+            return
+        body = "\n".join(
+            f"#{t['id']} [{t['status']}] {t['body']}" for t in items
+        )
+        await interaction.response.send_message(f"**Todos du salon :**\n{body}")
+
+    @tree.command(name="game-week", description="[Architecture] Paramètres de la semaine de jeu.")
+    @app_commands.describe(
+        action="show ou set",
+        week_id="Identifiant semaine (ex. 2026-W29)",
+        status="open, investing ou closed",
+        influence_min="Minimum HOP influence",
+        influence_max="Maximum HOP influence",
+        growth_factor="Facteur de croissance",
+        aum_per_trammer="Allocation universelle modique",
+    )
+    async def game_week_cmd(
+        interaction: discord.Interaction,
+        action: str = "show",
+        week_id: str | None = None,
+        status: str | None = None,
+        influence_min: float | None = None,
+        influence_max: float | None = None,
+        growth_factor: float | None = None,
+        aum_per_trammer: float | None = None,
+    ):
+        if not bot.has_architecture_role(interaction):
+            await interaction.response.send_message(PERM_DENIED, ephemeral=True)
+            return
+        game = _svc("game")
+        if game is None:
+            await interaction.response.send_message("Le jeu est désactivé.", ephemeral=True)
+            return
+        from services.game import GameError
+
+        if action == "set":
+            week = game.get_current_week() if not week_id else game._get_week(week_id)  # noqa: SLF001
+            fields = {
+                k: v
+                for k, v in {
+                    "status": status,
+                    "influence_min": influence_min,
+                    "influence_max": influence_max,
+                    "growth_factor": growth_factor,
+                    "aum_per_trammer": aum_per_trammer,
+                }.items()
+                if v is not None
+            }
+            if not fields:
+                await interaction.response.send_message(
+                    "Aucun paramètre à modifier.", ephemeral=True
+                )
+                return
+            try:
+                updated = game.update_week_params(week.week_id, **fields)
+            except GameError as exc:
+                await interaction.response.send_message(str(exc), ephemeral=True)
+                return
+            audit(str(interaction.user.id), "game_week_set", args=fields)
+            await interaction.response.send_message(
+                f"Semaine **{updated.week_id}** mise à jour (status={updated.status}).",
+                ephemeral=True,
+            )
+            return
+        week = game.get_current_week()
+        await interaction.response.send_message(
+            f"**Semaine {week.week_id}**\n"
+            f"- status : {week.status}\n"
+            f"- début : {week.starts_at}\n"
+            f"- fin placement : {week.invest_end}\n"
+            f"- influence : [{week.influence_min}, {week.influence_max}]\n"
+            f"- growth : {week.growth_factor}\n"
+            f"- AUM/trammer : {week.aum_per_trammer}",
+            ephemeral=True,
+        )
 
 
 def _resolve_entity(bot, needle: str):

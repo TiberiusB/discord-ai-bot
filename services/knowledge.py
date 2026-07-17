@@ -69,12 +69,35 @@ class KnowledgeService:
                 "chunks": docs_result.chunks,
                 "documents": docs_result.documents,
             }
+            self.export_public_rag()
         if scope in {"web", "all"}:
             if self.db is None:
                 raise RuntimeError("Database required for web reindex.")
             web_result = ingest_all_web_sources(self.settings, self.db)
             result["web"] = web_result
+        self.export_public_rag()
         return result
+
+    def export_public_rag(self) -> int:
+        """Write markdown snapshots of public collections to data/public_rag/."""
+        from ai.rag.privacy import public_collections
+
+        out_dir = self.settings.data_dir / "public_rag"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        written = 0
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        for collection in public_collections():
+            chunks = self.search("La Guilde des Tramarades", collections=[collection], k=50)
+            if not chunks:
+                continue
+            path = out_dir / f"{collection}_{stamp}.md"
+            body = f"# Export public RAG — {collection}\n\n"
+            body += "\n\n---\n\n".join(
+                f"## {c.source}\n\n{c.text[:1200]}" for c in chunks
+            )
+            path.write_text(body, encoding="utf-8")
+            written += 1
+        return written
 
     def list_web_sources(self) -> list[WebSource]:
         if self.db is None:

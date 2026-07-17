@@ -5,7 +5,7 @@
 > For product intent and requirement IDs, see [`requirements.md`](requirements.md).  
 > For schemas, APIs, and acceptance criteria, see [`specifications.md`](specifications.md).
 
-Last updated: July 2026.
+Last updated: 17 July 2026.
 
 ---
 
@@ -16,8 +16,7 @@ This plan answers three questions for the engineering team:
 1. **Where are the gaps** between the current codebase and what
    [`requirements.md`](requirements.md) / [`specifications.md`](specifications.md)
    describe?
-2. **What must happen next** to connect to Discord and run a controlled playtest
-   (< 100 members)?
+2. **What must happen next** now that the bot is connected and smoke-tested?
 3. **What comes after** the first live iteration, in sensible development phases?
 
 It does not duplicate the milestone history (M0–M6) or the pre-Discord hardening
@@ -29,30 +28,32 @@ pass — those are recorded in
 ## Current position
 
 The application code for milestones **M0–M6 is in place**, plus a **post-MVP
-round** (capabilities scan, identity aliases, governance DM escalation, Discord
-platform actions — see [`post_mvp.md`](post_mvp.md)). A **pre-Discord hardening
-round** added operational reliability (logging, health probes, strict allowlist,
-extended `/forgetme`).
+round** (capabilities, identity, governance DMs, platform actions — see
+[`post_mvp.md`](post_mvp.md)) and **admin-curated web RAG** (`/web-source`,
+Chroma `web`, `refresh_web_sources`).
 
-**We have not yet connected to a live Discord server** or validated behavior
-with real trammers. The immediate goal is a **narrow, allowlisted playtest** on
-the *Laboratoire tramiciel n°721* guild — not broad production rollout.
+**Phase 0 is complete:** the bot is connected to the *Laboratoire tramiciel
+n°721* guild. Smoke testing confirmed Discord connectivity, responsive
+triggers, an operational Ollama model, and verified agent reasoning. Live audit
+actions include `place_hops`, `say_tts`, `model_swap`, `/reindex`, and
+`/web-source add`.
+
+**Immediate focus is Phase 1** — a controlled allowlisted playtest with real
+tramarades: fix friction, tune rate limits, and exercise weekly game / summary
+flows. This is not a broad production rollout.
 
 ---
 
-## Open decisions (need operator input)
+## Open decisions (need operator / playtest input)
 
-These blockers are listed in [`specifications.md`](specifications.md) §14 and
-[`requirements.md`](requirements.md) §9. Resolve them before or during Phase 0.
-
-| # | Decision | Recommendation | Affects |
-|---|----------|----------------|---------|
-| 1 | `GUILD_ID` + `summary_channel_id` | Set in `.env` / `config.yaml` before connect | Scheduler jobs, game announcements |
-| 2 | Channel allowlist vs log-all | **Allowlist** + post [`ai_logging_notice.md`](ai_logging_notice.md) | MEM-1, GOV-10 |
-| 3 | Game **enforce** vs **assist** | Start with **assist** (human-run simulation); tighten if playtest needs it | GME-*, GOV-2 |
-| 4 | Default LLM soul | Keep `qwen2.5:7b-instruct`; experiment via `/model` | PLT-8, persona |
-| 5 | `@everyone` announcements | **Defer** until weekly cycle posts prove stable | PLT-4, ADM-4 |
-| 6 | Default social norms | Use seeded values in spec §9.3; adjust via `/norm-set` in playtest | GOV-10..12 |
+| # | Decision | Status | Affects |
+|---|----------|--------|---------|
+| 1 | `GUILD_ID` + `summary_channel_id` | **Resolved** — set for lab guild | Scheduler jobs, game announcements |
+| 2 | Channel allowlist vs log-all | **Resolved** — allowlist mode with lab salons configured | MEM-1, GOV-10 |
+| 3 | Game **enforce** vs **assist** | **Open** — recommend **assist** until playtest proves need | GME-*, GOV-2 |
+| 4 | Default LLM soul | **Resolved** — `qwen2.5:7b-instruct`; swap via `/model` / `/modele` | PLT-8, persona |
+| 5 | `@everyone` announcements | **Deferred** until weekly cycle posts prove stable | PLT-4, ADM-4 |
+| 6 | Default social norms | Seeded (spec §9.3); adjust via `/norm-set` during playtest | GOV-10..12 |
 
 ---
 
@@ -61,14 +62,14 @@ These blockers are listed in [`specifications.md`](specifications.md) §14 and
 Gaps are grouped by service tag (requirements §2) and traced to requirement or
 spec sections where possible.
 
-### Critical for first connect (Phase 0)
+### Phase 0 — Connect and smoke (complete)
 
-| Gap | Req / spec | Current state | Action |
-|-----|------------|---------------|--------|
-| Live Discord not tested | PLT-1..3 | Code ready; no production smoke | Operator setup + smoke checklist |
-| Allowlist not configured | PLT-6, MEM-1 | Empty list = DMs only (by design) | Add channel IDs to `config.yaml` |
-| AI-logging notice not posted | MEM-*, governance | Template exists | Post in guild before public use |
-| `GUILD_ID` / summary channel unset | ADM-3, MEM-4 | Env-dependent | Operator fills `.env` |
+| Gap | Req / spec | Outcome |
+|-----|------------|---------|
+| Live Discord not tested | PLT-1..3 | **Done** — connected; bot responsive; reasoning verified |
+| Allowlist not configured | PLT-6, MEM-1 | **Done** — lab salons in `config.yaml` |
+| `GUILD_ID` / summary channel | ADM-3, MEM-4 | **Done** — configured for lab guild |
+| AI-logging notice | MEM-*, governance | Confirm notice remains posted as playtest widens |
 
 ### Partial vs requirements (Phase 1–2)
 
@@ -90,7 +91,9 @@ spec sections where possible.
 
 ### Completed post-MVP (July 2026)
 
-These were open in earlier planning notes; now shipped — see [`post_mvp.md`](post_mvp.md):
+These were open in earlier planning notes; now shipped — see
+[`implementation_status.md`](implementation_status.md) (Post-MVP round). Deferred
+leftovers: [`post_mvp.md`](post_mvp.md).
 
 | Item | Status |
 |------|--------|
@@ -102,13 +105,13 @@ These were open in earlier planning notes; now shipped — see [`post_mvp.md`](p
 | Discord scheduled events | Partial (needs `MANAGE_EVENTS`) |
 | Proactive DMs to members (Échos) | Still deferred |
 
-### Quality and ops (Phase 3)
+### Quality and ops (Phase 4)
 
 | Gap | Req / spec | Current state | Planned work |
 |-----|------------|---------------|--------------|
-| Integration / E2E tests | NFR-2 (understandable code) | 25 unit tests | Mock Discord + Ollama; service integration tests |
+| Integration / E2E tests | NFR-2 (understandable code) | 38 unit tests | Mock Discord + Ollama; service integration tests |
 | Game rule test coverage | GME-5 | HOP logic untested in CI | Tests for `GameService` validation |
-| `/forgetme` E2E | MEM-2 | Unit tests for checkpoints | Verify Chroma delete against real index |
+| `/forgetme` E2E | MEM-2 | Unit tests for checkpoints + activity traces | Verify Chroma delete against real index |
 | Privileged intent review | Discord policy | Required if guild > 100 members | Monitor member count; submit verification if needed |
 | `LICENSE` | — | Missing | Add if distributing beyond lab |
 
@@ -140,47 +143,40 @@ flowchart LR
     P3 --> P4
 ```
 
-### Phase 0 — Connect and smoke test (immediate)
+### Phase 0 — Connect and smoke test (**complete**, July 2026)
 
 **Goal:** Tramice721 online on the lab guild with a **minimal, safe surface**.
 
-**Operator tasks**
+**Outcome**
 
-1. Discord Developer Portal: app, bot token, Message Content + Server Members intents, invite URL.
-2. `.env`: `DISCORD_TOKEN`, `GUILD_ID`, `ADMIN_ROLE_IDS`.
-3. `config.yaml`: populate `channels.allowlist` with 1–2 test salons; set `summary_channel_id` if summaries are wanted.
-4. Bootstrap: `python -m storage.db`, `python -m ai.rag.ingest`, `pytest tests/ -q`.
-5. Post [`ai_logging_notice.md`](ai_logging_notice.md).
-6. Run: `./run.sh` or systemd/Docker Compose.
+| Check | Result |
+|-------|--------|
+| Discord connect + slash sync | Passed — lab guild online |
+| Agent reply / reasoning | Passed — Ollama + LangGraph agent operational |
+| Mutations | Exercised live (`place_hops`, `say_tts`, `model_swap`) |
+| Knowledge ops | `/reindex`, `/web-source add` used successfully |
+| Ops signals | Capability scan + heartbeat observed while running |
 
-**Developer validation (in Discord)**
-
-| Check | Command / trigger | Pass criteria |
-|-------|-------------------|---------------|
-| Agent reply | `/ask`, `!ai`, DM | In-character French reply |
-| RAG grounding | Question about HOP / weekly cycle | Answer cites doc sources |
-| Web RAG | `/web-source add` then `/ask` on site topic | Answer cites ingested web source |
-| Admin health | `/health` | Ollama, SQLite, Chroma, jobs reported |
-| Privacy | `/forgetme` on test account | Messages, profile, checkpoints cleared |
-| Rate limit | Rapid prefix messages | Cooldown message shown |
-| Mutations | `/place`, `/event propose` | Confirm/cancel buttons; no commit without confirm |
-
-**Exit criteria:** Stable 24–48 h on test channels; no crashes; logs readable with `LOG_JSON=1`.
+Historical operator/setup steps remain in the [README](../README.md) for new
+environments. Exit criteria for Phase 0 are met; continue observing stability
+under playtest load in Phase 1.
 
 ---
 
-### Phase 1 — Playtest hardening (weeks 1–2 of live use)
+### Phase 1 — Playtest hardening (**current**, weeks 1–2 of live use)
 
-**Goal:** Fix friction discovered by real trammers; keep scope small.
+**Goal:** Fix friction discovered by real tramarades; keep scope small.
 
 | Priority | Work item | Rationale |
 |----------|-----------|-----------|
 | P1 | Bug fixes from smoke + first sessions | Blocking issues first |
 | P1 | Tune rate limits / queue depth from logs | PLT-8; CPU latency reality |
 | P1 | Improve slash output (embeds for `/mondo`, `/vote`) | Discord UX |
+| P1 | Exercise weekly game open/close + daily summary in production | Confirm scheduler posts are useful |
 | P2 | Game assist vs enforce decision (open #3) | Affects `GameService` strictness |
 | P2 | Daily summary quality review | MEM-4; anonymization in heated channels |
-| P2 | Document playtest channel IDs and norms in repo | Onboarding for other devs |
+| P2 | Confirm AI-logging notice stays visible as allowlist grows | MEM / governance |
+| P2 | Document playtest channel roles and norms for other operators | Onboarding |
 
 **Exit criteria:** Core flows used weekly without operator intervention; issue list triaged.
 
@@ -209,10 +205,10 @@ flowchart LR
 
 | Work item | Req / spec | Deliverable |
 |-----------|------------|-------------|
-| LaTramice.net fetch + ingest | KNW-3 | **Done** | Admin `/web-source`, Chroma `web`, SSRF-safe crawl |
-| Scheduled web refresh | ADM-2 | **Done** | `refresh_web_sources` job + `/reindex scope:web` |
+| LaTramice.net fetch + ingest | KNW-3 | **Done** — admin `/web-source`, Chroma `web`, SSRF-safe crawl |
+| Scheduled web refresh | ADM-2 | **Done** — `refresh_web_sources` job + `/reindex scope:web` |
 | Échos notification DMs | PLT-4 (optional) | Opt-in DM when synergy found; never auto-connect |
-| Soundboard voice playback | post-MVP | List via `/son`; playback deferred | Connect to voice + play sound |
+| Soundboard voice playback | post-MVP | Connect to voice + play sound (`/son` lists only today) |
 | `@everyone` for game week | PLT-4, ADM-4 | Gated by `everyone_announcements` + admin role |
 | Custom Modelfile in production | persona M6 | `ollama create tramice721`; document in README |
 | Enterprise dashboard command | ECO-1, IDN-2 | `/entity` or expanded `/mondo` embed |
@@ -256,24 +252,24 @@ Not scheduled; revisit after a successful playtest season.
 
 | Service | Key requirements | Primary phase |
 |---------|------------------|---------------|
-| `[platform]` | PLT-1..10 | 0, 1, 3 |
-| `[persona]` | §3, NFR-1, NFR-5 | 0, 1, 3 (Modelfile) |
-| `[community-memory]` | MEM-1..4 | 0, 1, 2 |
+| `[platform]` | PLT-1..10 | **0 done**, 1, 3 |
+| `[persona]` | §3, NFR-1, NFR-5 | **0 done**, 1, 3 (Modelfile) |
+| `[community-memory]` | MEM-1..4 | **0 done**, 1, 2 |
 | `[identity]` | IDN-1..6 | 1, 3 |
-| `[knowledge]` | KNW-1..4 | 0, 3 |
+| `[knowledge]` | KNW-1..4 | **0 done** (docs + web RAG), 3 for extras |
 | `[matchmaking]` | MTM-1..5 | 1, 3 |
 | `[coordination]` | CRD-1..4 | 1 |
-| `[game]` | GME-1..6 | 0, 1 (open decision #3) |
+| `[game]` | GME-1..6 | 1 (open decision #3) |
 | `[ecosystem-mapping]` | ECO-1..5 | 1, 3 |
 | `[governance]` | GOV-1..12 | 1, 2 |
-| `[administration]` | ADM-1..4 | 0, 4 |
+| `[administration]` | ADM-1..4 | **0 done**, 4 |
 
 ---
 
 ## How to use this plan
 
 1. **Starting work?** Read [`implementation_status.md`](implementation_status.md) for
-   what exists, then pick the current phase above.
+   what exists, then pick the current phase above (**Phase 1**).
 2. **Design question?** Check [`requirements.md`](requirements.md) for *what* and
    [`specifications.md`](specifications.md) for *how*.
 3. **Closing a gap?** Add the requirement ID to your PR description and update
@@ -281,5 +277,14 @@ Not scheduled; revisit after a successful playtest season.
 4. **Scope creep?** Compare against requirements §8 and specifications §13 before
    adding features.
 
-When Phase 0 completes, update this document: mark decisions resolved, move gaps
-to "done", and adjust Phase 1 priorities based on playtest feedback.
+Phase 0 is complete. Keep this document current as Phase 1 playtest feedback
+lands: mark decisions resolved, move gaps to "done", and re-prioritize.
+
+---
+
+## Harness (dual graph, July 2026)
+
+- **Creative harness** — `/mode` keys `listen`, `question`, `chat`; light tool set.
+- **Procedural harness** — `/mode` keys `cosmos`, `wishes`, `solve`; RAG/history prefetch + full tools.
+- **`/mode`** persists per Discord `channel_id` (salon or DM).
+- Code: `ai/agent/graph.py`, `ai/agent/harness.py`, `ai/persona.py`.

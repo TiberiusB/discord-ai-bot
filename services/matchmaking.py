@@ -149,3 +149,34 @@ class MatchmakingService:
         self.db.execute_app(
             "UPDATE echoes SET read = 1 WHERE trammer_id = ?", (trammer_id,)
         )
+
+    def has_recent_echo(self, trammer_id: str, source_id: str, hours: int = 24) -> bool:
+        from datetime import datetime, timedelta, timezone
+
+        since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+        row = self.db.query_app_one(
+            "SELECT id FROM echoes WHERE trammer_id = ? AND source_id = ? "
+            "AND created_at >= ? LIMIT 1",
+            (trammer_id, source_id, since),
+        )
+        return row is not None
+
+    def propose_echoes_for_all(self, limit_per_trammer: int = 3) -> int:
+        """Persist synergy proposals as Echo rows (no DMs). Returns count created."""
+        trammers = self.db.query_app(
+            "SELECT DISTINCT trammer_id FROM volios WHERE active = 1"
+        )
+        created = 0
+        for row in trammers:
+            tid = row["trammer_id"]
+            for match in self.find_synergies(tid, limit=limit_per_trammer):
+                if self.has_recent_echo(tid, match.other_id):
+                    continue
+                summary = (
+                    f"Synergie possible avec <@{match.other_id}> — {match.rationale}"
+                )
+                self.create_echo(
+                    tid, summary, source_id=match.other_id, match_type=match.match_type
+                )
+                created += 1
+        return created

@@ -12,7 +12,7 @@ in the weekly HOP cycle during the *Laboratoire tramiciel n°721* playtest.
 The bot runs entirely on your own hardware:
 
 - **Ollama** for chat and embeddings (default: `qwen2.5:7b-instruct`, `nomic-embed-text`;
-  trammers can select their own chat model with `/modele`)
+  trammers can select their own chat model with `/my-model`)
 - **LangGraph** react agent with per-thread conversational memory
 - **Chroma** RAG over project documents, admin-curated web sources, and (optionally) indexed salon history
 - **SQLite** for domain data, message logs, and agent checkpoints
@@ -54,7 +54,7 @@ and not multi-server sync (all explicitly out of scope for v1).
 | [`docs/specifications.md`](docs/specifications.md) | How it is built |
 | [`docs/implementation_status.md`](docs/implementation_status.md) | What is built today |
 | [`docs/planning.md`](docs/planning.md) | Gaps and next development phases |
-| [`docs/post_mvp.md`](docs/post_mvp.md) | Post-MVP features (capabilities, identity, platform actions) |
+| [`docs/post_mvp.md`](docs/post_mvp.md) | Post-MVP wishlist outcome + deferred leftovers |
 
 
 **Status:** Application code for milestones M0–M6 is in place; pre-Discord
@@ -132,7 +132,7 @@ ollama pull qwen2.5:7b-instruct
 ollama pull nomic-embed-text
 ```
 
-Any additional chat model you pull becomes selectable per-user via `/modele`
+Any additional chat model you pull becomes selectable per-user via `/my-model`
 (see [Choosing your model](#choosing-your-model-modele)). A tested alternative:
 
 ```bash
@@ -234,15 +234,17 @@ message when rate-limited; slash commands bypass user cooldown.
 | `/echoes` | View proposed synergies / Échos |
 | `/event` | List or propose community events |
 | `/mission` | List or publish game Missions |
-| `/place` | Place influence HOPs on a Mission (with confirmation) |
+| `/support` | Place, withdraw, move or list HOP influence (with confirmation) |
 | `/vote` | List, open, or cast votes (with confirmation) |
-| `/signalement` | File a graduated report (confidential) |
-| `/normes` | Show current social norms |
-| `/modele` | Choose your personal chat model (dropdown or autocomplete) |
+| `/signal` | File a graduated report (confidential) |
+| `/norms` | Show current social norms |
+| `/my-model` | Choose your personal chat model (dropdown or autocomplete) |
+| `/mode` | Set Tramice conversation mode for this channel/DM |
+| `/todo` | Shared todo list for the channel |
 | `/forgetme` | Delete your stored data; retains a minimal activity trace (see [Privacy](#privacy-and-data)) |
-| `/identite` | List known display names or link two member identities |
+| `/identity` | List known display names or link two member identities |
 | `/thread` | Create a discussion thread in the current channel |
-| `/sondage` | Publish a 24-hour Discord poll (2–4 options) |
+| `/poll` | Publish a 24-hour Discord poll (2–4 options) |
 | `/son` | List server soundboard sounds (playback not yet automated) |
 
 ### Admin
@@ -254,11 +256,12 @@ message when rate-limited; slash commands bypass user cooldown.
 | `/web-source add` | Register and crawl a web URL (same domain, admin-curated) |
 | `/web-source list` | List indexed web sources and status |
 | `/web-source remove` | Remove a web source and its RAG fragments |
-| `/norm-set` | Update a social norm |
+| `/set-norm` | Update a social norm |
+| `/game-week` | [Architecture] View or edit game week parameters |
 | `/health` | Ollama, SQLite, Chroma, scheduler, gateway, capability scan, error counters |
 | `/say` | Send a TTS message in the current channel (`features.tts` must be enabled) |
 
-Mutations (`/place`, `/event` propose, `/vote` cast) show **✅ Confirmer /
+Mutations (`/support`, `/event` propose, `/vote` cast) show **✅ Confirmer /
 ❌ Annuler** buttons before anything is committed.
 
 **Curating web knowledge (admin):**
@@ -270,15 +273,15 @@ Mutations (`/place`, `/event` propose, `/vote` cast) show **✅ Confirmer /
 
 Members' `/ask` queries search both local `docs/` and curated `web` sources via `search_knowledge`.
 
-### Choosing your model (`/modele`)
+### Choosing your model (`/my-model`)
 
 Any trammer can pick which locally-installed Ollama model answers **their own**
 conversations, without affecting anyone else:
 
-- `/modele` — show your current model and a **dropdown** of installed chat models.
-- `/modele nom:<model>` — switch to a model (e.g. `gemma2:9b`). Must be installed
+- `/my-model` — show your current model and a **dropdown** of installed chat models.
+- `/my-model nom:<model>` — switch to a model (e.g. `gemma2:9b`). Must be installed
   in Ollama; the embedding model is filtered out of the choices.
-- `/modele nom:defaut` — clear your choice and fall back to the community default.
+- `/my-model nom:defaut` — clear your choice and fall back to the community default.
 
 `/model` (admin) uses the same dropdown pattern for the community default.
 
@@ -288,13 +291,13 @@ answer quality, speed, and tool-calling reliability (larger models like
 your conversation memory is preserved, and your preference persists across
 restarts (stored in `app.sqlite`; cleared by `/forgetme`).
 
-Resolution order per turn: **your `/modele` choice → admin `/model` default →
+Resolution order per turn: **your `/my-model` choice → admin `/model` default →
 `llm.model` from `config.yaml`**.
 
 **Tool calling:** some models (e.g. `gemma2:9b`) don't support Ollama's
 tool-calling API. The bot detects this (via `ollama show` capabilities) and runs
 those models as a **no-tools** agent — full persona and conversation memory, but
-without tools like knowledge search, volios, or events. `/modele` warns you when
+without tools like knowledge search, volios, or events. `/my-model` warns you when
 a chosen model lacks tool support. For the full toolset, pick a tool-capable
 model such as `qwen2.5:7b-instruct`.
 
@@ -310,7 +313,7 @@ bot:
   timezone: America/Montreal
 
 llm:
-  model: qwen2.5:7b-instruct   # community default; per-user override via /modele
+  model: qwen2.5:7b-instruct   # community default; per-user override via /my-model
   embed_model: nomic-embed-text
 
 channels:
@@ -492,7 +495,7 @@ Admin health: `/health` in Discord.
 | [`docs/specifications.md`](docs/specifications.md) | Schemas, APIs, acceptance criteria |
 | [`docs/implementation_status.md`](docs/implementation_status.md) | Built features and known gaps |
 | [`docs/planning.md`](docs/planning.md) | Phased roadmap (connect → playtest → hardening) |
-| [`docs/post_mvp.md`](docs/post_mvp.md) | Post-MVP features (capabilities, identity, TTS, governance DMs) |
+| [`docs/post_mvp.md`](docs/post_mvp.md) | Post-MVP wishlist outcome + deferred leftovers |
 | [`docs/ai_logging_notice.md`](docs/ai_logging_notice.md) | Template notice for server members |
 | [`docs/jeu.pdf`](docs/jeu.pdf) | Game design (RAG source) |
 | [`.cursor/plans/discord_ai_bot_4b8e92eb.plan.md`](.cursor/plans/discord_ai_bot_4b8e92eb.plan.md) | Original milestone plan (M0–M6) |

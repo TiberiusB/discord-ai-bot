@@ -26,6 +26,8 @@ _FEMININE_FIXES = [
     (re.compile(r"\b(je suis )certain\b", re.IGNORECASE), r"\1certaine"),
     (re.compile(r"\b(je suis )sûr\b", re.IGNORECASE), r"\1sûre"),
     (re.compile(r"\b(je serais )heureux\b", re.IGNORECASE), r"\1heureuse"),
+    (re.compile(r"\bTramice\b(?!\s+n)", re.IGNORECASE), "Je"),
+    (re.compile(r"\bTramice721\b"), "Je"),
 ]
 
 _DEFAULT_ALLOWED_HOSTS = {

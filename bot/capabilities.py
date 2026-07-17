@@ -172,8 +172,12 @@ async def scan_capabilities(bot: "TramiceBot") -> dict[str, Any]:
 
     guild_perms = _perm_dict(me.guild_permissions)
     channels: dict[str, dict[str, bool]] = {}
-    allowlist = settings.get("channels.allowlist", []) or []
-    for cid in allowlist:
+    allowlist = settings.get("channels.interact_allowlist", []) or settings.get(
+        "channels.allowlist", []
+    ) or []
+    log_allowlist = settings.get("channels.log_allowlist", []) or allowlist
+    channel_ids = set(str(c) for c in allowlist) | set(str(c) for c in log_allowlist)
+    for cid in channel_ids:
         try:
             channel = guild.get_channel(int(cid)) or await bot.fetch_channel(int(cid))
         except (discord.DiscordException, ValueError):
@@ -181,9 +185,17 @@ async def scan_capabilities(bot: "TramiceBot") -> dict[str, Any]:
         if hasattr(channel, "permissions_for"):
             channels[str(cid)] = _perm_dict(channel.permissions_for(me))  # type: ignore[arg-type]
 
+    member_count = guild.member_count
+    if member_count is None:
+        member_count = len(guild.members) if guild.members else 0
+    roles = [{"id": str(r.id), "name": r.name} for r in guild.roles if r.name != "@everyone"]
     snapshot = {
         "scanned_at": datetime.now(timezone.utc).isoformat(),
         "guild_id": str(guild.id),
+        "guild_name": guild.name,
+        "member_count": member_count,
+        "channel_count": len(guild.channels),
+        "roles": roles[:50],
         "guild_permissions": guild_perms,
         "channels": channels,
         "strategy": build_strategy(guild_perms, channels),

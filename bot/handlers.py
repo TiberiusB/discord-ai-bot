@@ -5,41 +5,19 @@ from __future__ import annotations
 import discord
 
 from ai.guardrails import sanitize_input
+from bot.channel_policy import channel_in_interact, channel_in_log
 from bot.config import Settings
 from bot.router import AgentRequest
 
 
 def channel_allowed(settings: Settings, channel_id: str, is_dm: bool) -> bool:
-    """Whether the bot may act in this channel (PLT-6 + §10.1).
-
-    DMs are always allowed (personal-tramice surface). For salons the
-    ``channels.log_mode`` policy governs allow/deny lists.
-    """
-    if is_dm:
-        return True
-    mode = settings.get("channels.log_mode", "allowlist")
-    allowlist = {str(c) for c in settings.get("channels.allowlist", []) or []}
-    denylist = {str(c) for c in settings.get("channels.denylist", []) or []}
-    cid = str(channel_id)
-    if mode == "all":
-        return cid not in denylist
-    if mode == "denylist":
-        return cid not in denylist
-    # allowlist mode: empty allowlist means salons are disabled until configured.
-    # DMs remain available (handled above). Operators must set channel IDs
-    # explicitly before the bot acts in shared channels.
-    if not allowlist:
-        return False
-    return cid in allowlist and cid not in denylist
+    """Whether the bot may reply / accept triggers in this channel (PLT-6)."""
+    return channel_in_interact(settings, channel_id, is_dm)
 
 
 def should_log(settings: Settings, channel_id: str, is_dm: bool) -> bool:
     """Whether a message should be logged to community memory (MEM-1)."""
-    if is_dm:
-        # DMs are logged in the private tier (spec §7.4) but still recorded so
-        # the personal tramice can remember; they never enter public summaries.
-        return True
-    return channel_allowed(settings, channel_id, is_dm)
+    return channel_in_log(settings, channel_id, is_dm)
 
 
 def detect_trigger(

@@ -1193,7 +1193,8 @@ accounting, physical booklets, biometric identity, multi-server sync protocol.
 
 ## 15. Post-MVP additions (July 2026)
 
-Implemented after M6; see [`post_mvp.md`](post_mvp.md) for detail.
+Implemented after M6; see [`implementation_status.md`](implementation_status.md)
+(Post-MVP round). Deferred leftovers: [`post_mvp.md`](post_mvp.md).
 
 | Area | Deliverable |
 | ---- | ----------- |

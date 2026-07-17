@@ -72,6 +72,32 @@ class IdentityService:
             )
         return self.get_trammer(discord_user_id)  # type: ignore[return-value]
 
+    def get_profile_json(self, trammer_id: str) -> dict:
+        row = self.db.query_app_one(
+            "SELECT profile_json FROM trammers WHERE discord_user_id = ?",
+            (trammer_id,),
+        )
+        if row is None or not row["profile_json"]:
+            return {}
+        import json
+
+        try:
+            return json.loads(row["profile_json"])
+        except json.JSONDecodeError:
+            return {}
+
+    def update_profile_json(self, trammer_id: str, **fields) -> dict:
+        import json
+
+        self.upsert_trammer(trammer_id)
+        profile = self.get_profile_json(trammer_id)
+        profile.update({k: v for k, v in fields.items() if v is not None})
+        self.db.execute_app(
+            "UPDATE trammers SET profile_json = ?, updated_at = ? WHERE discord_user_id = ?",
+            (json.dumps(profile, ensure_ascii=False), utcnow(), trammer_id),
+        )
+        return profile
+
     def set_sponsor(self, trammer_id: str, sponsor_id: str) -> None:
         self.upsert_trammer(trammer_id)
         self.upsert_trammer(sponsor_id)

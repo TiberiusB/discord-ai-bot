@@ -16,7 +16,8 @@ def settings(tmp_path: Path) -> Settings:
         "bot": {"prefix": "!ai", "locale_default": "fr", "timezone": "America/Montreal"},
         "channels": {
             "log_mode": "allowlist",
-            "allowlist": ["111"],
+            "interact_allowlist": ["111"],
+            "log_allowlist": ["111", "333"],
             "denylist": ["999"],
         },
         "rate_limit": {

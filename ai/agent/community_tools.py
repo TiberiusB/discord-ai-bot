@@ -100,6 +100,20 @@ def make_community_tools(settings, services) -> list:
         snap = load_capabilities_snapshot(settings)
         return build_capabilities_note(snap)
 
+    def get_guild_metadata() -> str:
+        """Métadonnées du serveur Discord (cache capabilities.json)."""
+        snap = load_capabilities_snapshot(settings)
+        if not snap or not snap.get("guild_id"):
+            return "Serveur non configuré (GUILD_ID manquant)."
+        roles = snap.get("roles") or []
+        role_names = ", ".join(r["name"] for r in roles[:15]) or "—"
+        return (
+            f"Guilde : {snap.get('guild_name', '?')} (id {snap.get('guild_id')})\n"
+            f"Membres : {snap.get('member_count', '?')}\n"
+            f"Salons : {snap.get('channel_count', '?')}\n"
+            f"Rôles ({len(roles)}) : {role_names}"
+        )
+
     tools.append(
         StructuredTool.from_function(
             func=get_discord_capabilities,
@@ -107,6 +121,15 @@ def make_community_tools(settings, services) -> list:
             description=(
                 "Consulter les permissions Discord du bot (TTS, fils, événements, "
                 "soundboard) et la stratégie de communication à suivre."
+            ),
+        )
+    )
+    tools.append(
+        StructuredTool.from_function(
+            func=get_guild_metadata,
+            name="get_guild_metadata",
+            description=(
+                "Obtenir les métadonnées du serveur Discord : nom, membres, salons, rôles."
             ),
         )
     )
