@@ -16,7 +16,8 @@ aider (résumés, mise en relation, questions sur le jeu), elle peut **enregistr
 localement** les messages des salons où elle est autorisée à intervenir.
 
 **Ce qui est enregistré**
-- Messages des salons listés dans la configuration de la tramice (allowlist)
+- Messages des salons listés dans `channels.log_allowlist` (ou l'allowlist
+  historique) de la configuration
 - Messages privés (DM) avec Tramice721, pour la mémoire de votre tramice personnelle
 
 **Ce qui n'est pas partagé publiquement**
@@ -37,9 +38,12 @@ Des questions ? Mentionnez un admin ou écrivez à Tramice721 en DM.
 
 ## Notes pour les opérateurs
 
-1. Renseignez `channels.allowlist` dans [`config.yaml`](../config.yaml) avec les
-   IDs numériques des salons autorisés.
-2. Ne mettez **pas** de salons sensibles (modération, staff, confidences) dans
-   l'allowlist.
-3. Conservez `log_mode: allowlist` pour un déploiement contrôlé (< 100 membres).
-4. Testez `/forgetme` sur un compte de test avant d'annoncer le bot au public.
+1. Renseignez `channels.log_allowlist` dans [`config.yaml`](../config.yaml) avec
+   les IDs numériques des salons dont les messages doivent être journalisés.
+2. Renseignez `channels.interact_allowlist` pour les salons où le bot peut
+   répondre (`!ai`, `@mention`, `/ask`). Un salon peut être journalisé sans
+   interaction (ex. liste ToDo : log seulement).
+3. Ne mettez **pas** de salons sensibles (modération, staff, confidences) dans
+   ces listes.
+4. Conservez `log_mode: allowlist` pour un déploiement contrôlé (< 100 membres).
+5. Testez `/forgetme` sur un compte de test avant d'annoncer le bot au public.

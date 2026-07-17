@@ -16,9 +16,9 @@ lab guild (Phase 0). Do not duplicate feature write-ups here — see
 | Theme | Status | Notes |
 |-------|--------|-------|
 | Activity traces on `/forgetme` | **Done** | See implementation status → Post-MVP round |
-| Member aliases + `/identite` | **Done** | Auto-track + slash link/list |
+| Member aliases + `/identity` | **Done** | Auto-track + slash link/list |
 | Capability scan + agent strategy | **Done** | Daily scan; `get_discord_capabilities` |
-| Threads / polls / TTS | **Done** | `/thread`, `/sondage`, `/say` (TTS used live) |
+| Threads / polls / TTS | **Done** | `/thread`, `/poll`, `/say` (TTS used live) |
 | Discord scheduled events | **Done** | `/event` + `game_week_open`; lab has `MANAGE_EVENTS` |
 | Governance escalation DMs | **Done** | Threshold-based admin suggestions only |
 | Soundboard list (`/son`) | **Partial** | Lists sounds; playback deferred |
@@ -37,10 +37,11 @@ Intentional leftovers from the post-MVP notes (also listed under Known gaps in
 | Agent-initiated threads / TTS | Slash commands only; no create-thread/TTS agent tools |
 | `@everyone` send helper | Permission tracked in strategy; send path gated off |
 | Proactive Échos DMs | Propose-only; opt-in notify in [`planning.md`](planning.md) Phase 3 |
-| Identity tools for the agent | `/identite` works; no LangChain wrapper yet |
+| Identity tools for the agent | `/identity` works; no LangChain wrapper yet |
 
-Day-to-day playtest backlog (slash renames, read-only salons, `/mode`, etc.)
-lives in [`current_work.md`](current_work.md).
+Planning pass **P1–P15** (slash renames, dual harness, `/todo`, invest window,
+etc.) is **complete** — see [`current_work.md`](current_work.md) and
+[`implementation_status.md`](implementation_status.md); not duplicated here.
 
 
 # New ideas to implement

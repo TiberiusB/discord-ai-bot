@@ -753,6 +753,9 @@ def register_m4_commands(bot) -> None:  # noqa: C901 - cohesive command block
                 return
             dash = ecosystem.get_entity_dashboard(resolved[0])
             ent = dash.get("entity")
+            if ent is None:
+                await interaction.response.send_message("Entité introuvable.", ephemeral=True)
+                return
             lines = [
                 f"**{ent.title}** ({ent.kind}) · phase {ent.phase}",
                 f"HOP : {dash.get('hops_placed', 0):.2f} placés · {ent.hop_requested:.2f} demandés",

@@ -11,7 +11,7 @@
 | Version             | 0.2                                                |
 | Status              | Implemented (M0–M6 + post-MVP July 2026)             |
 | Primary runtime     | Python 3.12, discord.py 2.7, Ollama (local)        |
-| Default LLM         | `qwen2.5:7b-instruct` (per-user override: `/modele`) |
+| Default LLM         | `qwen2.5:7b-instruct` (per-user override: `/my-model`) |
 | Default embed model | `nomic-embed-text`                                 |
 | Target environment  | CPU-only, ~15 GB RAM, single Ollama inference slot |
 
@@ -129,6 +129,7 @@ discord-ai-bot/
 │   ├── main.py              # entrypoint: config, Discord client, scheduler
 │   ├── config.py            # .env + config.yaml loader
 │   ├── handlers.py          # prefix / mention / slash routing
+│   ├── channel_policy.py    # log_allowlist vs interact_allowlist
 │   ├── router.py            # rate limiter + single-flight queue
 │   ├── discord_client.py    # discord.py setup, intents, events
 │   ├── capabilities.py      # permission scan → capabilities.json (post-MVP)
@@ -153,6 +154,8 @@ discord-ai-bot/
 │   ├── agent/
 │   │   ├── state.py
 │   │   ├── graph.py
+│   │   ├── harness.py       # dual harness (creative vs procedural)
+│   │   ├── tool_wrapper.py  # safe tool errors + harness filtering
 │   │   └── tools.py         # LangChain tools wrapping services
 │   └── rag/
 │       ├── ingest.py
@@ -208,8 +211,8 @@ discord-ai-bot/
 **Algorithm:**
 
 1. Ignore messages from bots (`PLT-5`).
-2. Check channel allow/deny (`PLT-6`).
-3. Log message if logging enabled (`MEM-1`).
+2. Check channel interact policy (`PLT-6`; `interact_allowlist` / legacy `allowlist`).
+3. Log message if logging enabled for channel (`MEM-1`; `log_allowlist`).
 4. If trigger matches → enqueue `AgentRequest`.
 5. Worker dequeues one request at a time → invokes LangGraph agent.
 6. Post-process response (split if >2000 chars for Discord limit).
@@ -261,6 +264,11 @@ user per channel/DM (`IDN-3`).
 
 **Tool call limit:** max **5** tool calls per user turn (guard against small-model loops).
 
+**Dual harness (July 2026):** per-channel `/mode` selects creative vs procedural
+paths (`ai/agent/harness.py`). Procedural modes prefetch RAG/history context and
+expose the full tool set; creative modes use a lighter tool subset. Tool
+exceptions are wrapped as French error strings for the user (`tool_wrapper.py`).
+
 ### 3.3 Persona layer `[persona]`
 
 **Source files:** `prompts/tramice721_system.txt` (+ optional Ollama Modelfile M6).
@@ -277,7 +285,8 @@ Must embed:
 
 **Response post-checks (M6):**
 
-- French self-reference uses feminine forms when `locale=fr`.
+- French self-reference uses feminine forms when `locale=fr`; third-person
+  "Tramice" self-reference is corrected to first person in post-processing.
 - Strip fabricated URLs; validate links against allowlist (`fetch_allowlist`, discord CDN, and **domains of active curated web sources** from `web_sources`).
 
 ---
@@ -325,6 +334,7 @@ CREATE TABLE trammers (
     trust_score       REAL DEFAULT 0.0,   -- 0..1 best-effort
     hop_balance       REAL DEFAULT 0.0,   -- simulated; CHECK 0..99999.99
     is_tramicien      INTEGER DEFAULT 0,
+    profile_json      TEXT,               -- optional structured profile fields
     created_at        TEXT NOT NULL,
     updated_at        TEXT NOT NULL,
     FOREIGN KEY (sponsor_id) REFERENCES trammers(discord_user_id)
@@ -581,6 +591,22 @@ CREATE TABLE user_model_prefs (
     updated_at        TEXT NOT NULL
 );
 
+-- Per-channel conversation mode (/mode) and shared todos (/todo)
+CREATE TABLE channel_modes (
+    channel_id    TEXT PRIMARY KEY,
+    mode          TEXT NOT NULL DEFAULT 'listen',
+    updated_at    TEXT NOT NULL
+);
+
+CREATE TABLE channel_todos (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel_id    TEXT NOT NULL,
+    body          TEXT NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'todo',
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
+
 -- Curated web sources (admin `/web-source`; shallow same-domain crawl → Chroma `web`)
 CREATE TABLE web_sources (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -678,11 +704,14 @@ class GameService:
     def publish_quest(self, owner_id: str, spec: QuestSpec) -> Entity: ...
     def compute_influence_budget(self, week_id: str) -> float: ...
     def place_hops(self, trammer_id: str, entity_id: str, amount: float) -> Placement: ...
+    def move_hops(self, trammer_id: str, from_entity_id: str, to_entity_id: str, amount: float) -> None: ...
     def recognize_work(self, entity_id: str, trammer_id: str, hops: float, ...) -> Recognition: ...
     def get_trammer_balance(self, trammer_id: str) -> float: ...  # enforces GME-5
 ```
 
-**Weekly cycle timezone:** `America/Montreal` (configurable). Scheduler fires:
+**Weekly cycle timezone:** `America/Montreal` (configurable). Placements rejected
+outside Thu 17:00 – Sun 23:59 when week status is not `investing`/`open`.
+Scheduler fires:
 
 - Thu 17:00 → open investment, publish budget announcement
 - Sun 23:59 → close investment, finalize allocations
@@ -695,7 +724,8 @@ class GameService:
 class EcosystemService:
     def list_mondo(self, view: Literal["perso", "cosmo"], trammer_id: str | None,
                    filters: MondoFilters) -> list[EntityCard]: ...
-    def get_entity_dashboard(self, entity_id: str) -> EntityDashboard: ...
+    def get_entity_dashboard(self, entity_id: str, week_id: str | None = None) -> dict: ...
+    def get_social_stats(self) -> dict: ...
     def get_playtest_stats(self) -> PlaytestStats: ...
 ```
 
@@ -732,6 +762,7 @@ class KnowledgeService:
                        max_depth: int | None = None, max_pages: int | None = None) -> dict: ...
     def list_web_sources(self) -> list[WebSource]: ...
     def remove_web_source(self, url_or_id: str) -> dict: ...
+    def export_public_rag(self) -> int: ...  # snapshots to data/public_rag/
     def web_source_domains(self) -> list[str]: ...  # for output link allowlist
 ```
 
@@ -774,6 +805,7 @@ class MemoryService:
 | `summarize_channel`     | GovernanceService   | M4        |
 | `create_vote`           | GovernanceService   | M5        |
 | `get_server_overview`   | MCP discord_helper  | M4        |
+| `get_guild_metadata`    | MCP discord_helper  | P15       |
 | `fetch_channel_history` | MCP discord_helper  | M4        |
 
 
@@ -787,6 +819,10 @@ Each tool schema includes: `name`, `description` (French-friendly), typed
 @mcp.tool()
 def get_server_overview(guild_id: str) -> dict:
     """Channel list, member count, recent activity stats."""
+
+@mcp.tool()
+def get_guild_metadata() -> dict:
+    """Guild name, channel list, roles summary (from live Discord + config allowlists)."""
 
 @mcp.tool()
 def fetch_channel_history(channel_id: str, limit: int = 50,
@@ -862,24 +898,27 @@ Config key: `triggers.prefix` default `!ai`.
 | `/ask`         | agent          | all    | Ask Tramice721 (optional `question` param)   |
 | `/summarize`   | governance     | all    | Summarize current channel (optional `hours`) |
 | `/volio`       | identity       | all    | List or add a volio entry                    |
-| `/mondo`       | ecosystem      | all    | Show Mondo overview (`perso`/`cosmo`)        |
+| `/mondo`       | ecosystem      | all    | Mondo views: `perso`, `cosmo`, `stats`, `knowledge`, `entity` |
 | `/echoes`      | matchmaking    | all    | List unread Échos                            |
 | `/mission`     | game           | all    | Publish or view Missions                     |
-| `/place`       | game           | all    | Place influence HOPs (confirm button)        |
+| `/support`     | game           | all    | Place, withdraw, move, or list HOP influence (confirm) |
 | `/vote`        | governance     | all    | View/open votes                              |
 | `/event`       | coordination   | all    | Propose or list events                       |
-| `/signalement` | governance     | all    | File graduated report                        |
+| `/signal`      | governance     | all    | File graduated report                        |
 | `/forgetme`    | memory         | all    | Delete user's stored data (retains activity trace) |
-| `/normes`      | governance     | all    | Show social norms                            |
-| `/modele`      | administration | all    | Choose personal Ollama model (dropdown)      |
-| `/identite`    | identity       | all    | List known names or link identities          |
+| `/norms`       | governance     | all    | Show social norms                            |
+| `/my-model`    | administration | all    | Choose personal Ollama model (dropdown)      |
+| `/mode`        | persona        | all    | Set conversation mode / harness for channel |
+| `/todo`        | coordination   | all    | Shared todo list for the channel             |
+| `/identity`    | identity       | all    | List known names or link identities          |
 | `/thread`      | platform       | all    | Create a channel thread                      |
-| `/sondage`     | platform       | all    | Publish a Discord poll                       |
+| `/poll`        | platform       | all    | Publish a Discord poll                       |
 | `/son`         | platform       | all    | List soundboard sounds                       |
 | `/reindex`     | administration | admin  | Rebuild RAG index (`scope`: docs, web, or all) |
 | `/web-source`  | administration | admin  | **Group:** `add` / `list` / `remove` curated web sources |
 | `/model`       | administration | admin  | Swap community default Ollama model          |
-| `/norm-set`    | governance     | admin  | Update a social norm                         |
+| `/set-norm`    | governance     | admin  | Update a social norm                         |
+| `/game-week`   | game           | admin  | View or edit weekly game parameters          |
 | `/health`      | administration | admin  | Runtime + Discord health snapshot            |
 | `/say`         | platform       | admin  | Send TTS message (`features.tts`)            |
 
@@ -914,6 +953,7 @@ Discord embed + `✅ Confirmer` / `❌ Annuler` buttons (`discord.ui.View`).
 | `build_daily_summary`    | `0 8 * * *`     | Post summary to `summary_channel_id`        |
 | `game_week_open`         | `0 17 * * 4`    | Open investment window; announce budgets; optional Discord event |
 | `game_week_close`        | `59 23 * * 0`   | Close window; finalize allocations          |
+| `propose_echoes`         | `0 * * * *`     | Hourly synergy batch → Échos inbox (no DMs) |
 | `capability_scan`        | `0 4 * * *`     | Refresh `data/capabilities.json` (post-MVP) |
 
 
@@ -956,7 +996,8 @@ llm:
 
 channels:
   log_mode: allowlist          # allowlist | denylist | all
-  allowlist: []
+  interact_allowlist: []       # bot replies / triggers
+  log_allowlist: []            # message logging (may be superset)
   denylist: []
   summary_channel_id: null
 
@@ -1141,7 +1182,7 @@ Structured JSON to stdout (M6): `level`, `event`, `guild_id`, `channel_id`,
 - [x] `discord_helper` + `rag_server` wired via MultiServerMCPClient
 - [x] `/volio`, `/mondo`, `/echoes`, `/summarize` functional
 - [x] Matchmaking proposes connections; no auto-DM
-- [x] Social norms readable via `/normes`
+- [x] Social norms readable via `/norms`
 
 
 
@@ -1149,7 +1190,7 @@ Structured JSON to stdout (M6): `level`, `event`, `guild_id`, `channel_id`,
 
 - [x] Nightly message indexing job runs
 - [x] Daily summary posts to configured channel
-- [x] Weekly game open/close jobs fire; `/place` and `/mission` work with confirmation
+- [x] Weekly game open/close jobs fire; `/support` and `/mission` work with confirmation
 - [x] `/vote` creates vote; ballots tallied against threshold
 
 
@@ -1180,11 +1221,11 @@ accounting, physical booklets, biometric identity, multi-server sync protocol.
 | #   | Decision                                      | Status / recommendation        |
 | --- | --------------------------------------------- | ------------------------------ |
 | 1   | `GUILD_ID` + `summary_channel_id`             | Set in lab deployment          |
-| 2   | `log_mode: allowlist` vs `all`                | **Allowlist** + AI notice      |
+| 2   | `log_allowlist` vs `interact_allowlist`       | Set in lab deployment          |
 | 3   | Game enforce vs assist                        | **Assist** for playtest        |
-| 4   | Default LLM soul                              | `qwen2.5:7b-instruct`; `/modele` for experiments |
+| 4   | Default LLM soul                              | `qwen2.5:7b-instruct`; `/my-model` for experiments |
 | 5   | `@everyone` enabled?                          | Deferred; capability tracked   |
-| 6   | Default social norms for playtest             | Seeded in §9.3; `/norm-set`    |
+| 6   | Default social norms for playtest             | Seeded in §9.3; `/set-norm`    |
 
 
 ---
@@ -1194,14 +1235,18 @@ accounting, physical booklets, biometric identity, multi-server sync protocol.
 ## 15. Post-MVP additions (July 2026)
 
 Implemented after M6; see [`implementation_status.md`](implementation_status.md)
-(Post-MVP round). Deferred leftovers: [`post_mvp.md`](post_mvp.md).
+(Post-MVP round + Planning pass P1–P15). Deferred leftovers: [`post_mvp.md`](post_mvp.md).
 
 | Area | Deliverable |
 | ---- | ----------- |
 | Privacy | `activity_traces` on `/forgetme` |
-| Identity | `member_aliases`, `identity_links`, `/identite` |
-| Platform | Capability scan, `/thread`, `/sondage`, `/say`, `/son` |
+| Identity | `member_aliases`, `identity_links`, `/identity`, `profile_json` |
+| Platform | Capability scan, `/thread`, `/poll`, `/say`, `/son`, `/mode`, `/todo` |
 | Coordination | Discord scheduled events on `/event` + `game_week_open` |
+| Game | `/support` move/withdraw, invest window, `/game-week` |
+| Ecosystem | `/mondo` stats/knowledge/entity, `entity_updates`, public RAG export |
+| Matchmaking | Hourly `propose_echoes` job (inbox only) |
+| Agent | Dual harness, tool failure feedback, `get_guild_metadata` |
 | Governance | Moderation DM suggestions (`governance.escalation_threshold`) |
 | Ops | `discord_errors.py`, expanded `/health`, `DISCORD_LOG_LEVEL` |
 

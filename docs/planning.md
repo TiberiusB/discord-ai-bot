@@ -49,11 +49,11 @@ flows. This is not a broad production rollout.
 | # | Decision | Status | Affects |
 |---|----------|--------|---------|
 | 1 | `GUILD_ID` + `summary_channel_id` | **Resolved** — set for lab guild | Scheduler jobs, game announcements |
-| 2 | Channel allowlist vs log-all | **Resolved** — allowlist mode with lab salons configured | MEM-1, GOV-10 |
+| 2 | Channel allowlist vs log-all | **Resolved** — `log_allowlist` + `interact_allowlist` in lab config | MEM-1, GOV-10 |
 | 3 | Game **enforce** vs **assist** | **Open** — recommend **assist** until playtest proves need | GME-*, GOV-2 |
-| 4 | Default LLM soul | **Resolved** — `qwen2.5:7b-instruct`; swap via `/model` / `/modele` | PLT-8, persona |
+| 4 | Default LLM soul | **Resolved** — `qwen2.5:7b-instruct`; swap via `/model` / `/my-model` | PLT-8, persona |
 | 5 | `@everyone` announcements | **Deferred** until weekly cycle posts prove stable | PLT-4, ADM-4 |
-| 6 | Default social norms | Seeded (spec §9.3); adjust via `/norm-set` during playtest | GOV-10..12 |
+| 6 | Default social norms | Seeded (spec §9.3); adjust via `/set-norm` during playtest | GOV-10..12 |
 
 ---
 
@@ -75,7 +75,7 @@ spec sections where possible.
 
 | Gap | Req / spec | Current state | Planned work |
 |-----|------------|---------------|--------------|
-| Tribunal workflow UI | GOV-7, GOV-8, spec §5.6 | `open_tribunal`, `draw_jury`, `record_jurisprudence` in `GovernanceService`; `/signalement` only | Admin slash commands for tribunal lifecycle |
+| Tribunal workflow UI | GOV-7, GOV-8, spec §5.6 | `open_tribunal`, `draw_jury`, `record_jurisprudence` in `GovernanceService`; `/signal` only | Admin slash commands for tribunal lifecycle |
 | Output data-classification | spec §10.3, IDN-6 | Link allowlist + feminine fixes only | Requester/owner checks before exposing private tier data |
 | Tool result size cap (8 KB) | spec §10.3 | Not enforced | Truncate tool returns in agent layer |
 | Soundboard playback | post-MVP | `/son` lists sounds; no voice playback | Wire playback when voice connect is added |
@@ -84,7 +84,7 @@ spec sections where possible.
 | Browser-search MCP | requirements §3.3 TODO | Not started | Evaluate after web fetch |
 | Social-norm enforcement in code | GOV-12, requirements TODO | Norms stored and shown; partial policy in handlers | Central policy module used by RAG, summaries, profiles |
 | Trust capital / parrainage UX | IDN-4, IDN-5 | Schema + service fields; limited slash exposure | Agent tools + `/volio` extensions if playtest needs them |
-| Enterprise / Quête dashboards | IDN-2, ECO-3 | Entity model exists; text listings via `/mondo` | Richer embeds or `/entity` command |
+| Enterprise / Quête dashboards | IDN-2, ECO-3 | Entity model + `/mondo view:entity` dashboard | Richer embeds or dedicated `/entity` command |
 | Mediation in heated salons | GOV-5, GOV-6 | Persona prompt only | Detect + offer mediation (careful: false positives) |
 | Matchmaking discreet flags | MTM-5 | Not implemented | Consent-gated vulnerability notes |
 | `services/platform.py` | spec §2.4 | Logic in `bot/` (incl. `capabilities.py`, `discord_actions.py`) | Optional refactor; low priority |
@@ -98,19 +98,19 @@ leftovers: [`post_mvp.md`](post_mvp.md).
 | Item | Status |
 |------|--------|
 | Activity trace on `/forgetme` | Done (`activity_traces`) |
-| Member alias tracking + `/identite` | Done |
-| Governance admin DM suggestions | Done (`/signalement` escalation) |
+| Member alias tracking + `/identity` | Done |
+| Governance admin DM suggestions | Done (`/signal` escalation) |
 | Discord capability scan + agent strategy | Done (`capability_scan` job) |
-| Threads, polls, TTS | Done (`/thread`, `/sondage`, `/say`) |
-| Discord scheduled events | Partial (needs `MANAGE_EVENTS`) |
-| Proactive DMs to members (Échos) | Still deferred |
+| Threads, polls, TTS | Done (`/thread`, `/poll`, `/say`) |
+| Discord scheduled events | Done (lab guild has `MANAGE_EVENTS`) |
+| Proactive Échos DMs | Still deferred (hourly batch writes inbox Échos only) |
 
 ### Quality and ops (Phase 4)
 
 | Gap | Req / spec | Current state | Planned work |
 |-----|------------|---------------|--------------|
-| Integration / E2E tests | NFR-2 (understandable code) | 38 unit tests | Mock Discord + Ollama; service integration tests |
-| Game rule test coverage | GME-5 | HOP logic untested in CI | Tests for `GameService` validation |
+| Integration / E2E tests | NFR-2 (understandable code) | 46 unit tests | Mock Discord + Ollama; service integration tests |
+| Game rule test coverage | GME-5 | Basic `GameService` tests in CI | Expand HOP / invest-window coverage |
 | `/forgetme` E2E | MEM-2 | Unit tests for checkpoints + activity traces | Verify Chroma delete against real index |
 | Privileged intent review | Discord policy | Required if guild > 100 members | Monitor member count; submit verification if needed |
 | `LICENSE` | — | Missing | Add if distributing beyond lab |
@@ -167,12 +167,18 @@ under playtest load in Phase 1.
 
 **Goal:** Fix friction discovered by real tramarades; keep scope small.
 
+Planning pass **P1–P15 is complete** (July 2026) — see
+[`current_work.md`](current_work.md) and
+[`implementation_status.md`](implementation_status.md) (Planning pass section).
+Remaining Phase 1 work is operational validation and UX polish:
+
 | Priority | Work item | Rationale |
 |----------|-----------|-----------|
 | P1 | Bug fixes from smoke + first sessions | Blocking issues first |
 | P1 | Tune rate limits / queue depth from logs | PLT-8; CPU latency reality |
 | P1 | Improve slash output (embeds for `/mondo`, `/vote`) | Discord UX |
 | P1 | Exercise weekly game open/close + daily summary in production | Confirm scheduler posts are useful |
+| P1 | Manual smoke checklist in `current_work.md` | Deploy verification |
 | P2 | Game assist vs enforce decision (open #3) | Affects `GameService` strictness |
 | P2 | Daily summary quality review | MEM-4; anonymization in heated channels |
 | P2 | Confirm AI-logging notice stays visible as allowlist grows | MEM / governance |
@@ -207,11 +213,11 @@ under playtest load in Phase 1.
 |-----------|------------|-------------|
 | LaTramice.net fetch + ingest | KNW-3 | **Done** — admin `/web-source`, Chroma `web`, SSRF-safe crawl |
 | Scheduled web refresh | ADM-2 | **Done** — `refresh_web_sources` job + `/reindex scope:web` |
-| Échos notification DMs | PLT-4 (optional) | Opt-in DM when synergy found; never auto-connect |
+| Échos notification DMs | PLT-4 (optional) | Opt-in DM when synergy found; hourly inbox batch exists (P12) |
 | Soundboard voice playback | post-MVP | Connect to voice + play sound (`/son` lists only today) |
 | `@everyone` for game week | PLT-4, ADM-4 | Gated by `everyone_announcements` + admin role |
 | Custom Modelfile in production | persona M6 | `ollama create tramice721`; document in README |
-| Enterprise dashboard command | ECO-1, IDN-2 | `/entity` or expanded `/mondo` embed |
+| Enterprise dashboard command | ECO-1, IDN-2 | **Partial** — `/mondo view:entity`; richer embeds TBD |
 
 **Exit criteria:** Factual answers link to LaTramice.net where appropriate; no unsolicited mass DMs.
 
@@ -287,4 +293,12 @@ lands: mark decisions resolved, move gaps to "done", and re-prioritize.
 - **Creative harness** — `/mode` keys `listen`, `question`, `chat`; light tool set.
 - **Procedural harness** — `/mode` keys `cosmos`, `wishes`, `solve`; RAG/history prefetch + full tools.
 - **`/mode`** persists per Discord `channel_id` (salon or DM).
-- Code: `ai/agent/graph.py`, `ai/agent/harness.py`, `ai/persona.py`.
+- Failed tool calls return French feedback to the user (P11).
+- Code: `ai/agent/graph.py`, `ai/agent/harness.py`, `ai/agent/tool_wrapper.py`, `ai/persona.py`.
+
+## Channel policy (log vs interact, July 2026)
+
+- **`channels.interact_allowlist`** — prefix, `@mention`, and agent replies allowed.
+- **`channels.log_allowlist`** — messages written to `history.sqlite` / RAG (may include log-only salons).
+- Legacy **`channels.allowlist`** applies to both when the new keys are omitted.
+- Code: `bot/channel_policy.py`, `bot/handlers.py`.

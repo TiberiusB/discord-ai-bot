@@ -354,7 +354,7 @@ class GameService:
             week_id=week.week_id,
             trammer_id=trammer_id,
             entity_id=entity_id,
-            hop_amount=amount,
+            hop_amount=new_amount,
         )
 
     def finalize_allocations(self, week_id: str) -> int:

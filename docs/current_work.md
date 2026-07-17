@@ -1,8 +1,8 @@
 # Immediate improvements — status
 
 All P1–P15 items from the planning pass are **implemented** (July 2026).
-
-See [`README.md`](../README.md) for updated slash command names and [`planning.md`](planning.md) for harness notes.
+Documentation is aligned with the codebase — see
+[`implementation_status.md`](implementation_status.md) (Planning pass P1–P15).
 
 ## Completed
 

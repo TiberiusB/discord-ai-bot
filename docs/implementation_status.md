@@ -18,7 +18,7 @@ in the weekly HOP cycle during the *Laboratoire tramiciel n°721* playtest.
 The bot runs entirely on your own hardware:
 
 - **Ollama** for chat and embeddings (default: `qwen2.5:7b-instruct`, `nomic-embed-text`;
-  per-user chat model selectable via `/modele`)
+  per-user chat model selectable via `/my-model`)
 - **LangGraph** react agent with per-thread conversational memory
 - **Chroma** RAG over project documents, admin-curated web sources, and (optionally) indexed salon history
 - **SQLite** for domain data, message logs, and agent checkpoints
@@ -52,12 +52,12 @@ and not multi-server sync (all explicitly out of scope for v1).
    HOP cycle, and posts scheduled summaries and game announcements.
 4. **Admins** swap the community default model, reindex local docs and/or curated
    web sources (`/reindex`, `/web-source`), adjust social norms, and check health
-   via slash commands. Any trammer can also pick their own chat model with `/modele`.
+   via slash commands. Any trammer can also pick their own chat model with `/my-model`.
 
 The bot is **live on the lab guild** (*Laboratoire tramiciel n°721*). Operators
 should keep the AI-logging notice posted
-([`ai_logging_notice.md`](ai_logging_notice.md)) and maintain the allowlist in
-`config.yaml` as the playtest expands.
+([`ai_logging_notice.md`](ai_logging_notice.md)) and maintain
+`interact_allowlist` / `log_allowlist` in `config.yaml` as the playtest expands.
 
 ---
 
@@ -69,10 +69,10 @@ should keep the AI-logging notice posted
 | Pre-Discord hardening | **Done** | Observability, deployment polish, tests, privacy baseline |
 | Live Discord smoke test | **Done** | Connected to lab guild; bot responsive; Ollama + agent reasoning verified (July 2026) |
 | Playtest hardening | **In progress** | Phase 1 — widen surface carefully; fix friction from real use |
-| Automated test suite | **Minimal** | 38 unit tests; no integration tests against Discord or Ollama |
+| Automated test suite | **Minimal** | 46 unit tests; no integration tests against Discord or Ollama |
 | Production at scale | **Not targeted** | Single guild, CPU-only, no sharding |
 
-Approximate size: **~8,100 lines** of Python application code (excluding
+Approximate size: **~8,600 lines** of Python application code (excluding
 `venv/`, tests, and docs).
 
 ---
@@ -88,8 +88,8 @@ Source of truth for milestone definitions:
 | **M1** | Discord client, triggers, persona, router, `/ask`, `/model` | Complete |
 | **M2** | Message log, `/forgetme`, LangGraph checkpointer, identity tables | Complete |
 | **M3** | Chroma RAG, doc ingest, web ingest, `KnowledgeService`, `/reindex`, `/web-source` | Complete |
-| **M4** | MCP servers, community services, `/volio` `/mondo` `/echoes` `/event` `/summarize` `/normes` | Complete |
-| **M5** | APScheduler jobs, game simulation, `/mission` `/place` `/vote`, signalement | Complete |
+| **M4** | MCP servers, community services, `/volio` `/mondo` `/echoes` `/event` `/summarize` `/norms` | Complete |
+| **M5** | APScheduler jobs, game simulation, `/mission` `/support` `/vote`, `/signal` | Complete |
 | **M6** | Guardrails, audit log, deployment assets, health checks | Complete |
 
 ### Pre-Discord improvement round (July 2026)
@@ -101,12 +101,13 @@ A focused pass before first Discord connection added:
 - Global slash-command error handler
 - Graceful router shutdown and agent checkpointer cleanup
 - Heartbeat file for Docker/system health probes (`data/.health`)
-- Startup config warnings (empty allowlist, missing `GUILD_ID`, etc.)
-- **Strict allowlist policy**: empty `allowlist` = DMs only (no salon access)
+- Startup config warnings (empty interact allowlist, missing `GUILD_ID`, etc.)
+- **Strict interact policy**: empty `interact_allowlist` (legacy `allowlist`) = DMs only for triggers
+- **Split channel lists**: `log_allowlist` vs `interact_allowlist` (log-only salons supported)
 - Extended `/forgetme`: checkpoints + Chroma `history` embeddings (+ model pref)
 - AI-logging notice template, systemd `EnvironmentFile`, Docker healthchecks
 - Initial `tests/` suite and GitHub Actions CI
-- **Per-user model selection** (`/modele`): tramarades choose their own Ollama chat
+- **Per-user model selection** (`/my-model`): tramarades choose their own Ollama chat
   model with caution messaging; stored in `user_model_prefs`, resolved per turn
 
 ### Post-MVP round (July 2026)
@@ -120,7 +121,7 @@ confidences, checkpoints, Chroma `history` embeddings, and the per-user model
 preference, then keeps a minimal `activity_traces` row (display name, first/last
 activity, message count, `forgotten_at`) — no message content.
 
-**Member aliases + `/identite`:** display names recorded on logged messages and
+**Member aliases + `/identity`:** display names recorded on logged messages and
 on `on_member_update` / `on_user_update` (`member_aliases`). Slash actions:
 
 | Action | Who | Behaviour |
@@ -140,22 +141,45 @@ available; slow-mode bypass is not (`manage_messages` false).
 | Feature | Command / trigger | Gate | Notes |
 |---------|-------------------|------|-------|
 | Threads | `/thread` | `CREATE_*_THREADS` | Implemented |
-| Polls | `/sondage` | Channel send | 24 h Discord poll |
+| Polls | `/poll` | Channel send | 24 h Discord poll |
 | TTS | `/say` (admin) | `SEND_TTS_MESSAGES` + `features.tts` | Used live |
 | Soundboard list | `/son` | `USE_SOUNDBOARD` | List only; no voice playback |
 | Scheduled events | `/event` confirm, `game_week_open` | `MANAGE_EVENTS` | Lab guild has permission |
 
-**Governance escalation:** after `/signalement`,
+**Governance escalation:** after `/signal`,
 `evaluate_moderation()` checks `governance.escalation_threshold` (default **3**)
 and level-3 reports, then DMs guild owner + admin roles with a
 suspend/ban/mediation *suggestion*. Never bans or suspends autonomously.
 
 **Ops / UI:** `discord_errors.py` + `safe_channel_send`; expanded `/health`
 (gateway, queue, capability scan, error counters); `ModelSelectView` dropdowns
-for `/model` and `/modele` (plus autocomplete; `/modele nom:defaut` clears
+for `/model` and `/my-model` (plus autocomplete; `/my-model nom:defaut` clears
 override). Set `DISCORD_LOG_LEVEL=INFO` when diagnosing gateway issues.
 
-**Tests:** `test_post_mvp.py`, `test_discord_errors.py`.
+**Tests:** `test_post_mvp.py`, `test_discord_errors.py`, `test_game.py`, `test_harness.py`.
+
+### Planning pass P1–P15 (July 2026)
+
+Slash renames, channel policy split, game UX, dual harness, and platform extras
+from [`current_work.md`](current_work.md) — all **implemented**:
+
+| Pri | Deliverable | Notes |
+|-----|-------------|-------|
+| P1 | Slash renames + `/my-model` | `/support`, `/signal`, `/identity`, `/poll`, `/set-norm`, `/norms`, … |
+| P2 | `log_allowlist` / `interact_allowlist` | `bot/channel_policy.py`; log-only salons (e.g. ToDo) |
+| P3 | Invest window + HOP reallocation | `GameService._ensure_invest_window`; `/support move\|withdraw` |
+| P4 | `/game-week` | Admin show/set week parameters |
+| P5 | `profile_json` | JSON profile blob on `trammers` |
+| P6 | Enterprise dashboard | `entity_updates`, `/mondo view:entity` |
+| P7 | `/todo` | Per-channel shared lists (`channel_todos`) |
+| P8 | First-person persona | `prompts/tramice721_system.txt` + guardrails |
+| P9 | Dual harness | `ai/agent/harness.py`; procedural vs creative tool sets |
+| P10 | `/mode` per channel | `channel_modes` table |
+| P11 | Tool failure feedback | `tool_wrapper.py`; French errors surfaced to user |
+| P12 | Hourly Échos job | `propose_echoes` scheduler → inbox only (no DMs) |
+| P13 | `/mondo view:stats` | `EcosystemService.get_social_stats()` |
+| P14 | Public RAG export | `data/public_rag/`; `/mondo view:knowledge` |
+| P15 | Guild metadata tools | `get_guild_metadata` agent tool + MCP |
 
 ### Live Discord smoke test (July 2026)
 
@@ -223,9 +247,9 @@ Entry point: `python -m bot.main` (or `./run.sh`).
 | Config loader | `config.py` | `.env` + `config.yaml` merge |
 | Discord client | `discord_client.py` | Intents, `on_message`, slash sync, chunking |
 | Message router | `router.py` | Single-flight queue, cooldowns, `SubmitResult` |
-| Trigger handlers | `handlers.py` | Prefix, mention, DM; allowlist/denylist |
+| Trigger handlers | `handlers.py`, `channel_policy.py` | Prefix, mention, DM; log vs interact allowlists |
 | Slash commands | `commands.py` | Full command set (see README) |
-| Confirmation UI | `ui.py` | `ConfirmView` for mutating actions; `ModelSelectView` for `/model` `/modele` |
+| Confirmation UI | `ui.py` | `ConfirmView` for mutating actions; `ModelSelectView` for `/model` `/my-model` |
 | Capabilities | `capabilities.py` | Permission scan → `data/capabilities.json`; strategy note + `get_discord_capabilities` |
 | Discord actions | `discord_actions.py` | Scheduled events, threads, soundboard listing (`attach_discord_event_id`) |
 | Discord errors | `discord_errors.py` | Classified French hints, `safe_channel_send`; use `DISCORD_LOG_LEVEL=INFO` to debug |
@@ -239,14 +263,14 @@ bots (PLT-5).
 **Slash commands (all registered):**
 
 - Everyone: `/ask`, `/summarize`, `/volio`, `/mondo`, `/echoes`, `/event`,
-  `/mission`, `/place`, `/vote`, `/signalement`, `/normes`, `/modele`,
-  `/forgetme`, `/identite`, `/thread`, `/sondage`, `/son`
-- Admin: `/model`, `/reindex`, `/web-source`, `/norm-set`, `/health`, `/say`
+  `/mission`, `/support`, `/vote`, `/signal`, `/norms`, `/my-model`, `/mode`,
+  `/todo`, `/forgetme`, `/identity`, `/thread`, `/poll`, `/son`
+- Admin: `/model`, `/reindex`, `/web-source`, `/set-norm`, `/game-week`, `/health`, `/say`
 
-**Model selection:** `/modele` lets each trammer choose a locally-installed chat
+**Model selection:** `/my-model` lets each trammer choose a locally-installed chat
 model for their own conversations (`ModelSelectView` dropdown and autocomplete;
 embedding model filtered out; ephemeral replies with a caution note).
-`/modele nom:defaut` clears the personal override. Preference is stored in
+`/my-model nom:defaut` clears the personal override. Preference is stored in
 `app.sqlite` (`user_model_prefs`) and cleared by `/forgetme`. Admin `/model`
 sets the runtime default for everyone else (not persisted). Resolution per turn:
 per-user choice → admin default → `llm.model` from `config.yaml`.
@@ -254,7 +278,11 @@ per-user choice → admin default → `llm.model` from `config.yaml`.
 Models without tool-calling support (e.g. `gemma2:9b`) are detected via
 `ollama show` capabilities and run as a **no-tools** react agent (persona +
 memory, no tools); a runtime fallback also rebuilds without tools if inference
-returns "does not support tools". `/modele` warns the user in that case.
+returns "does not support tools". `/my-model` warns the user in that case.
+
+**Dual harness:** `/mode` selects creative (`listen`, `question`, `chat`) vs
+procedural (`cosmos`, `wishes`, `solve`) paths in `ai/agent/graph.py`; tool
+sets filtered via `ai/agent/tool_wrapper.py`.
 
 ### AI layer (`ai/`)
 
@@ -264,12 +292,12 @@ returns "does not support tools". `/modele` warns the user in that case.
 | Model resolution | `responder.py` (`resolve_model`) | Per-user model → default; used by agent + direct responder |
 | Persona | `persona.py` | System prompt from `prompts/tramice721_system.txt`; salon vs DM addendum |
 | Direct fallback | `responder.py` | Single-turn responder if agent fails to load |
-| LangGraph agent | `agent/graph.py` | React agent, checkpointer, tool-call cap, turn logging |
+| LangGraph agent | `agent/graph.py`, `agent/harness.py` | React agent, dual harness, checkpointer, tool-call cap |
 | Agent tools | `agent/tools.py`, `service_tools.py`, `community_tools.py` | Knowledge search + service wrappers |
 | RAG ingest | `rag/ingest.py`, `rag/web_ingest.py` | PDF/Markdown → `docs`; messages → `history`; curated URLs → `web` |
 | RAG retrieval | `rag/retriever.py`, `embeddings.py` | Vector search via Ollama embeddings |
 | RAG privacy | `rag/privacy.py` | Delete user history embeddings on `/forgetme` |
-| Guardrails | `guardrails.py` | Strip `@everyone`/`@here`; feminine fixes; link allowlist |
+| Guardrails | `guardrails.py` | Strip `@everyone`/`@here`; first-person + feminine fixes; link allowlist |
 
 Optional Ollama Modelfile: `prompts/tramice721_modelfile`.
 
@@ -277,14 +305,14 @@ Optional Ollama Modelfile: `prompts/tramice721_modelfile`.
 
 | Service | File | Implemented |
 |---------|------|-------------|
-| Identity | `identity.py` | Trammers, volios, confidences, aliases, identity links |
+| Identity | `identity.py` | Trammers, volios, confidences, aliases, identity links, `profile_json` |
 | Memory | `memory.py` | Logging facade; `/forgetme` with `activity_traces` (name, span, count only) + model pref |
-| Knowledge | `knowledge.py` | RAG search (docs+web), reindex scopes, web source registry |
-| Matchmaking | `matchmaking.py` | Synergies, Échos (propose-only) |
-| Coordination | `coordination.py` | Events, RSVPs, teams |
-| Ecosystem | `ecosystem.py` | Mondo perso/cosmo listings |
+| Knowledge | `knowledge.py` | RAG search (docs+web), reindex scopes, web source registry, public RAG export |
+| Matchmaking | `matchmaking.py` | Synergies, Échos (propose-only), hourly batch job |
+| Coordination | `coordination.py` | Events, RSVPs, teams, channel todos |
+| Ecosystem | `ecosystem.py` | Mondo perso/cosmo/stats/knowledge/entity; playtest stats |
 | Governance | `governance.py` | Norms, votes, summaries, signalements; `evaluate_moderation` → admin DM suggestions |
-| Game | `game.py` | Weekly cycle, HOP rules, missions, placements |
+| Game | `game.py` | Weekly cycle, invest window, HOP rules, missions, placements, move/withdraw |
 | Registry | `registry.py` | Wires all services at startup |
 
 Not present as a separate module: `services/platform.py` (logic lives in `bot/`).
@@ -293,7 +321,7 @@ Not present as a separate module: `services/platform.py` (logic lives in `bot/`)
 
 | Store | File | Purpose |
 |-------|------|---------|
-| `app.sqlite` | `db.py` | Trammers, volios, entities, game, governance, aliases, activity traces, model prefs, **web_sources** |
+| `app.sqlite` | `db.py` | Trammers, volios, entities, game, governance, aliases, activity traces, model prefs, channel modes/todos, **web_sources** |
 | `history.sqlite` | `history.py` | Message log with soft-delete |
 | `checkpoints.sqlite` | LangGraph | Per-thread agent memory |
 | Checkpoint cleanup | `checkpoints.py` | Delete threads on `/forgetme` |
@@ -324,6 +352,7 @@ All jobs run in `America/Montreal` (configurable):
 | `game_week_open` | Thursday 17:00 | Implemented |
 | `game_week_close` | Sunday 23:59 | Implemented |
 | `capability_scan` | Daily 04:00 | Implemented (refreshes `data/capabilities.json`) |
+| `propose_echoes` | Hourly :00 | Implemented (batch Échos; no member DMs) |
 
 Jobs log duration and outcome via `log_job()`.
 
@@ -344,7 +373,7 @@ Set `LOG_JSON=1` for structured JSON logs in production.
 
 | Module | Covers |
 |--------|--------|
-| `test_handlers.py` | Allowlist policy, DM logging |
+| `test_handlers.py` | Allowlist policy, log vs interact, DM logging |
 | `test_router.py` | Cooldown, slash bypass, submit status |
 | `test_guardrails.py` | Input sanitize, link stripping |
 | `test_startup.py` | Launch config warnings |
@@ -353,8 +382,10 @@ Set `LOG_JSON=1` for structured JSON logs in production.
 | `test_discord_errors.py` | Discord error classification, runtime health |
 | `test_web_ingest.py` | URL validation, SSRF guards, domain crawl rules |
 | `test_knowledge_web.py` | Web source registry, scoped reindex, search collections |
+| `test_game.py` | Invest window, HOP placement rules |
+| `test_harness.py` | Conversation mode → harness mapping |
 
-Run: `pip install -r requirements-dev.txt && PYTHONPATH=. pytest tests/ -q` (38 tests)
+Run: `pip install -r requirements-dev.txt && PYTHONPATH=. pytest tests/ -q` (46 tests)
 
 ---
 
@@ -367,15 +398,20 @@ needing operator decisions — not blockers for a controlled first playtest.
 |------|--------|-------|
 | Live Discord connection | **Done** | Lab guild connected; smoke test passed (July 2026) |
 | Tribunal admin workflow | Partial | `GovernanceService` jury/tribunal methods exist; no slash/admin UI |
-| Governance admin DM suggestions | **Done** | `/signalement` → `evaluate_moderation` → `dm_admins` (post-MVP) |
-| Member alias / identity linking | **Done** | Auto-track + `/identite` (post-MVP) |
+| Governance admin DM suggestions | **Done** | `/signal` → `evaluate_moderation` → `dm_admins` (post-MVP) |
+| Member alias / identity linking | **Done** | Auto-track + `/identity` (post-MVP) |
 | Activity trace on `/forgetme` | **Done** | `activity_traces` table (post-MVP) |
 | Capability scan + agent strategy | **Done** | `capabilities.json` + daily job (post-MVP) |
-| Discord threads / polls / TTS | **Done** | `/thread`, `/sondage`, `/say` (post-MVP) |
+| Discord threads / polls / TTS | **Done** | `/thread`, `/poll`, `/say` (post-MVP) |
 | Discord scheduled events | **Done** | On `/event` confirm + `game_week_open`; lab guild has `MANAGE_EVENTS` |
 | Soundboard playback | Partial | `/son` lists sounds; voice playback not wired |
 | Agent-initiated threads / TTS | Not implemented | Slash commands only; agent has `get_discord_capabilities`, not create-thread/TTS tools |
-| Identity tools for the agent | Not implemented | `/identite` works; no LangChain wrapper for link/list yet |
+| Identity tools for the agent | Not implemented | `/identity` works; no LangChain wrapper for link/list yet |
+| Hourly Échos batch job | **Done** | `propose_echoes` job; inbox only (P12) |
+| Dual harness + `/mode` | **Done** | Creative vs procedural paths (P9–P10) |
+| Enterprise dashboard / entity updates | **Done** | `/mondo view:entity`, `entity_updates` (P6) |
+| Channel todos | **Done** | `/todo`, log-only salon pattern (P7) |
+| Game invest window enforcement | **Done** | Thu–Sun window; `/support move\|withdraw` (P3) |
 | Proactive DMs to members | Not implemented | PLT-4; only reactive DMs and admin escalation today |
 | `@everyone` announcements | Not implemented | Capability tracked in strategy; send path gated (`features.everyone_announcements`) |
 | Web fetch MCP (live) | Config only | `features.web_fetch: false`; optional runtime fetch via `uvx mcp-server-fetch` |
@@ -393,7 +429,7 @@ needing operator decisions — not blockers for a controlled first playtest.
 Initial connect checklist is **complete** for the lab guild. Ongoing ops:
 
 1. Keep `ollama serve` and the bot process running (`./run.sh`, systemd, or Docker).
-2. Maintain `channels.allowlist` as new salons are opened to the bot.
+2. Maintain `channels.interact_allowlist` and `channels.log_allowlist` as salons evolve.
 3. Keep the AI-logging notice visible ([`ai_logging_notice.md`](ai_logging_notice.md)).
 4. Before releases: `PYTHONPATH=. pytest tests/ -q`, then smoke `/ask` + `/health`.
 5. Use `/web-source` / `/reindex` when curated knowledge changes.

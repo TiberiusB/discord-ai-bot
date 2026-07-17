@@ -211,7 +211,7 @@ Discord surfaces, triggers, and delivery constraints.
 | PLT-3 | MUST support configured triggers: prefix (`!ai`), `@mention`, and slash commands (`/ask`, `/summarize`, etc.).                                                                                                               |
 | PLT-4 | MUST be able to send DMs to server members and MAY send `@everyone` announcements (gated behind config / permission; used sparingly).                                                                                        |
 | PLT-5 | MUST **not reply to other bots**.                                                                                                                                                                                            |
-| PLT-6 | MUST only act in channels it is granted access to (Discord permissions plus bot-side allow/deny list). `[administration]`                                                                                                    |
+| PLT-6 | MUST only act in channels it is granted access to (Discord permissions plus bot-side **interact** allow/deny list). Logging MAY use a separate **log** allowlist. `[administration]` |
 | PLT-7 | Behavior MUST differ by surface: **DM** = personal-tramice mode (well-being check → wishes); **salon** = community mode (enthusiasm, emojis; intervenes with solutions only when asked or when mediation helps). `[persona]` |
 
 
@@ -432,13 +432,14 @@ Logging, retention, and history-powered features.
 
 | ID    | Requirement                                                                                                                                             |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| MEM-1 | MUST log readable messages to a local store to power summaries, matchmaking, and RAG-over-history, honoring channel allow/deny list. `[administration]` |
+| MEM-1 | MUST log readable messages to a local store to power summaries, matchmaking, and RAG-over-history, honoring channel log allow/deny list (may differ from interact allowlist). `[administration]` |
 | MEM-2 | MUST offer a member data-deletion path (e.g. `/forgetme`). MAY retain a minimal activity trace (name, span, count) without message content. |
 | MEM-3 | Confidences to the tramice and DMs MUST stay private — not surfaced in public summaries or matchmaking without consent. `[governance]` `[identity]`     |
 | MEM-4 | SHOULD post a scheduled **daily/periodic server summary** to a configured channel. `[governance]` `[administration]`                                    |
 
 
-**Privacy:** logging all messages has GDPR-style implications → channel allowlist, posted AI-logging notice, deletion command. `[governance]` `[administration]`
+**Privacy:** logging messages has GDPR-style implications → separate log and
+interact allowlists, posted AI-logging notice, deletion command. `[governance]` `[administration]`
 
 ---
 
@@ -451,7 +452,7 @@ Operator-facing configuration and maintenance.
 
 | ID    | Requirement                                                                                           |
 | ----- | ----------------------------------------------------------------------------------------------------- |
-| ADM-1 | MUST support **model swap** (config + `/model` command) — the tramice "soul" is replaceable. Per-user override via `/modele`. |
+| ADM-1 | MUST support **model swap** (config + `/model` command) — the tramice "soul" is replaceable. Per-user override via `/my-model`. |
 | ADM-2 | SHOULD support manual `/reindex` (scoped: docs, web, or all), `/web-source` curation, and scheduled indexing/summaries. `[knowledge]` `[community-memory]` |
 | ADM-3 | SHOULD expose channel allow/deny list and feature flags via `config.yaml` / `.env`.                   |
 | ADM-4 | SHOULD gate `@everyone` announcements behind explicit permission/config. `[platform]`                 |
@@ -549,13 +550,13 @@ Physical registers (paper; bot explains, does not replace): **Recognition Bookle
 | `[platform]`          | M1 discord.py client, intents, triggers; `bot/handlers.py` routing                 |
 | `[knowledge]`         | M3 RAG: ingest `docs/` → Chroma; curated web via `/web-source` → `web`; `search_knowledge` (docs+web); optional live fetch MCP |
 | `[identity]`          | M2/M4 SQLite profiles (volio, enterprise/quest dashboards); LangGraph checkpointer |
-| `[matchmaking]`       | M4 `discord_helper` MCP + agent tools; Échos notifications                         |
-| `[coordination]`      | M4 agent tools; calendar/scheduling helpers                                        |
-| `[game]`              | M5 scheduler jobs; agent tools for Missions/Quêtes/HOP math                        |
-| `[ecosystem-mapping]` | M4 `get_server_overview`; Mondo-style listing tools                                |
-| `[governance]`        | M4/M5 agent (summaries, votes, mediation, jury draw, social norms config)          |
-| `[community-memory]`  | M2 SQLite message log; M5 daily summary job                                        |
-| `[administration]`    | M1 `/model`, `/modele`; M3 `/reindex`, `/web-source`; `bot/config.py`; M6 guardrails, rate-limit/queue; post-MVP `/health`, capability scan |
+| `[matchmaking]`       | M4 agent tools; hourly `propose_echoes` job → Échos inbox (no auto-DM) |
+| `[coordination]`      | M4 agent tools; `/todo` channel lists; calendar/scheduling helpers |
+| `[game]`              | M5 scheduler jobs; `/support` HOP placements (invest window); `/game-week` admin |
+| `[ecosystem-mapping]` | M4 Mondo listings; `/mondo` stats/knowledge/entity views; enterprise dashboards |
+| `[governance]`        | M4/M5 agent (summaries, votes, mediation, jury draw, social norms config) |
+| `[community-memory]`  | M2 SQLite message log (log allowlist); M5 daily summary job |
+| `[administration]`    | M1 `/model`, `/my-model`; M3 `/reindex`, `/web-source`; `/mode` harness; `bot/config.py`; M6 guardrails; post-MVP `/health`, capability scan |
 
 
 ---
@@ -584,7 +585,7 @@ Physical registers (paper; bot explains, does not replace): **Recognition Bookle
 | #   | Question                                                       | Affects                                 |
 | --- | -------------------------------------------------------------- | --------------------------------------- |
 | 1   | Target guild ID and channel for periodic summaries?            | `[administration]` `[community-memory]` |
-| 2   | Channel allowlist vs log-everything (privacy notice wording)?  | `[governance]` `[community-memory]`     |
+| 2   | Channel log vs interact allowlists (privacy notice wording)?  | `[governance]` `[community-memory]`     |
 | 3   | Enforce game rules vs merely assist the human-run simulation?  | `[game]` `[governance]`                 |
 | 4   | Default LLM "soul" for persona voice (CPU-only constraints)?   | `[persona]` `[administration]`          |
 | 5   | Enable `@everyone` announcements, and behind which permission? | `[platform]` `[administration]`         |

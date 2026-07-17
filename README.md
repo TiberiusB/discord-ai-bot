@@ -57,9 +57,9 @@ and not multi-server sync (all explicitly out of scope for v1).
 | [`docs/post_mvp.md`](docs/post_mvp.md) | Post-MVP wishlist outcome + deferred leftovers |
 
 
-**Status:** Application code for milestones M0–M6 is in place; pre-Discord
-hardening is done. Live guild testing is the next step — see
-[Before you go live](#before-you-go-live).
+**Status:** Application code for milestones M0–M6 and planning pass P1–P15 is
+in place; pre-Discord hardening is done. Live guild testing and manual smoke
+checks are the next step — see [Before you go live](#before-you-go-live).
 
 ---
 
@@ -133,7 +133,7 @@ ollama pull nomic-embed-text
 ```
 
 Any additional chat model you pull becomes selectable per-user via `/my-model`
-(see [Choosing your model](#choosing-your-model-modele)). A tested alternative:
+(see [Choosing your model](#choosing-your-model-my-model)). A tested alternative:
 
 ```bash
 ollama pull gemma2:9b
@@ -157,9 +157,10 @@ ADMIN_ROLE_IDS=role_id_1,role_id_2   # optional; guild owner is always admin
 OLLAMA_HOST=http://127.0.0.1:11434
 ```
 
-Edit `config.yaml` — **add at least one channel ID** to `channels.allowlist`
-before testing in salons (see [Configuration](#configuration)). DMs work without
-an allowlist.
+Edit `config.yaml` — **add at least one channel ID** to
+`channels.interact_allowlist` (and usually `channels.log_allowlist`) before
+testing in salons (see [Configuration](#configuration)). DMs work without an
+interact allowlist.
 
 ### 4. Initialize data
 
@@ -199,7 +200,8 @@ in [`docs/planning.md`](docs/planning.md) Phase 0.
    app, enable **Message Content** + **Server Members** intents, invite with
    `bot` + `applications.commands` scopes.
 2. Set `DISCORD_TOKEN` and `GUILD_ID` in `.env`.
-3. Add salon channel IDs to `channels.allowlist` in `config.yaml`.
+3. Add salon channel IDs to `channels.interact_allowlist` (and
+   `channels.log_allowlist` where messages should be logged) in `config.yaml`.
 4. Set `channels.summary_channel_id` if you want daily summaries or game posts.
 5. Post the AI-logging notice from [`docs/ai_logging_notice.md`](docs/ai_logging_notice.md).
 6. Run `pytest tests/ -q`, then start the bot and smoke-test `/ask`, a DM, `/health`, and (admin) `/web-source list`.
@@ -230,7 +232,7 @@ message when rate-limited; slash commands bypass user cooldown.
 | `/ask` | Ask Tramice721 a question |
 | `/summarize` | Summarize recent activity in the current channel |
 | `/volio` | View or add entries to your volio (profile) |
-| `/mondo` | Explore the Mondo map (`perso` or `cosmo` view) |
+| `/mondo` | Explore the Mondo map (`perso`, `cosmo`, `stats`, `knowledge`, or `entity`) |
 | `/echoes` | View proposed synergies / Échos |
 | `/event` | List or propose community events |
 | `/mission` | List or publish game Missions |
@@ -264,6 +266,27 @@ message when rate-limited; slash commands bypass user cooldown.
 Mutations (`/support`, `/event` propose, `/vote` cast) show **✅ Confirmer /
 ❌ Annuler** buttons before anything is committed.
 
+**`/mondo` views:** `perso` / `cosmo` (default listings), `stats` (playtest
+social counters), `knowledge` (public RAG excerpts or recent exports), `entity`
+(enterprise dashboard with HOP totals and recent updates — use `query`).
+
+**`/support` actions:** `place`, `withdraw`, `move`, or `list` HOP influence.
+Placements are accepted only during the weekly investment window (Thu 17:00 →
+Sun 23:59 Montreal); `/game-week` (admin) can inspect or tune week parameters.
+
+### Conversation modes (`/mode`)
+
+Each salon or DM can set a **conversation mode** that selects the agent
+**harness**:
+
+| Harness | Modes | Behaviour |
+|---------|-------|-----------|
+| Creative | `listen`, `question`, `chat` | Lighter tool set; conversational focus |
+| Procedural | `cosmos`, `wishes`, `solve` | RAG/history prefetch + full tools |
+
+Use `/mode` to show or change the mode for the current channel. The choice
+persists in `app.sqlite` (`channel_modes`).
+
 **Curating web knowledge (admin):**
 
 1. `/web-source add url:https://latramice.net/... label:Boutique` — crawl same domain, embed into Chroma `web`
@@ -273,7 +296,7 @@ Mutations (`/support`, `/event` propose, `/vote` cast) show **✅ Confirmer /
 
 Members' `/ask` queries search both local `docs/` and curated `web` sources via `search_knowledge`.
 
-### Choosing your model (`/my-model`)
+### Choosing your model (`/my-model`) {#choosing-your-model-my-model}
 
 Any trammer can pick which locally-installed Ollama model answers **their own**
 conversations, without affecting anyone else:
@@ -318,7 +341,8 @@ llm:
 
 channels:
   log_mode: allowlist          # allowlist | denylist | all
-  allowlist: []                # REQUIRED for salon access — empty = DMs only
+  interact_allowlist: []       # salons where bot replies (!ai, @mention, /ask)
+  log_allowlist: []            # salons logged to history/RAG (may be superset)
   denylist: []
   summary_channel_id: null     # daily summaries + game announcements
 
@@ -329,7 +353,7 @@ features:
   tts: true                    # admin /say (requires SEND_TTS_MESSAGES)
 
 governance:
-  escalation_threshold: 3      # open signalements before admin DM on /signalement
+  escalation_threshold: 3      # open signalements before admin DM on /signal
 
 rate_limit:
   per_user_cooldown_sec: 10
@@ -344,8 +368,11 @@ rag:
     require_allowlist: false  # true = seed domain must be in fetch_allowlist
 ```
 
-In **allowlist** mode, an empty `allowlist` means the bot responds in **DMs only**
-until you add channel IDs. This is intentional for a controlled playtest rollout.
+In **allowlist** mode, an empty `interact_allowlist` means the bot responds in
+**DMs only** until you add channel IDs. You can log a salon without letting the
+bot chat there (log-only ToDo channels: in `log_allowlist` but not
+`interact_allowlist`). Legacy `channels.allowlist` still works as a fallback for
+both lists.
 
 ### Environment variables
 
@@ -372,6 +399,7 @@ All times are **America/Montreal** (configurable in `config.yaml`).
 | `game_week_open` | Thursday 17:00 | Open investment window; announce budgets; optional Discord scheduled event |
 | `game_week_close` | Sunday 23:59 | Close window; finalize HOP allocations |
 | `capability_scan` | Daily 04:00 | Refresh `data/capabilities.json` and agent communication strategy |
+| `propose_echoes` | Hourly :00 | Batch synergy scan → Échos inbox (no DMs) |
 
 Requires `channels.summary_channel_id` for summary and game posts. Discord
 scheduled events require `MANAGE_EVENTS` on the bot role.
@@ -382,10 +410,10 @@ scheduled events require `MANAGE_EVENTS` on the bot role.
 
 ```
 discord-ai-bot/
-├── bot/                 # Discord client, router, commands, capabilities, observability
+├── bot/                 # Discord client, router, commands, channel policy, capabilities, observability
 ├── services/            # Domain services (identity, game, governance, …)
 ├── ai/
-│   ├── agent/           # LangGraph react agent, tools, state
+│   ├── agent/           # LangGraph react agent, harness, tools, state
 │   └── rag/             # Chroma ingest, web crawl, retrieval, privacy
 ├── mcp_servers/         # stdio MCP servers (discord_helper, rag_server)
 ├── storage/             # SQLite schemas, history, checkpoint cleanup
@@ -404,7 +432,7 @@ discord-ai-bot/
 └── deploy/tramice721.service
 ```
 
-Approximate size: **~7,100 lines** of Python application code.
+Approximate size: **~8,600 lines** of Python application code.
 
 ---
 
@@ -418,13 +446,14 @@ Approximate size: **~7,100 lines** of Python application code.
   checkpoints, and deletes Chroma `history` embeddings for that user. A minimal
   **activity trace** (display name, activity span, message count) is retained in
   `activity_traces` for audit — no message content is kept.
-- Display-name changes are tracked in `member_aliases`; use `/identite` to list
+- Display-name changes are tracked in `member_aliases`; use `/identity` to list
   or link identities.
-- After repeated `/signalement` reports, admins may receive a **DM suggestion**
+- After repeated `/signal` reports, admins may receive a **DM suggestion**
   (never an automatic ban).
 - Post an **AI-logging notice** before going live —
   [`docs/ai_logging_notice.md`](docs/ai_logging_notice.md).
-- Use `channels.allowlist` to limit which salons are logged and where the bot acts.
+- Use `channels.interact_allowlist` and `channels.log_allowlist` to control
+  where the bot chats vs where messages are logged.
 
 ---
 
@@ -460,7 +489,8 @@ Set `LOG_JSON=1` in production for structured turn and job logging.
 | Symptom | Check |
 |---------|-------|
 | Bot exits immediately | `DISCORD_TOKEN` set in `.env`? Check logs for `LoginFailure` or `PrivilegedIntentsRequired` |
-| Bot ignores salon messages | `channels.allowlist` includes that channel ID? |
+| Bot ignores salon messages | Channel in `channels.interact_allowlist`? (DMs always work) |
+| ToDo salon: no bot replies | Channel may be log-only — use `/todo`; not in `interact_allowlist` |
 | "Mon moteur de réflexion est indisponible" | `ollama serve` running? Model pulled? |
 | RAG returns nothing | Run `python -m ai.rag.ingest`; verify `nomic-embed-text` |
 | Web RAG empty | `/web-source list` — any sources indexed? Ollama up during `/web-source add`? |
