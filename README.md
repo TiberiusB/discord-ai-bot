@@ -51,6 +51,9 @@ and not multi-server sync (all explicitly out of scope for v1).
 | Doc | Purpose |
 |-----|---------|
 | [`docs/requirements.md`](docs/requirements.md) | What the bot must do |
+| [`docs/requirements_v2.md`](docs/requirements_v2.md) | What the next version must do, and why |
+| [`docs/acceptance_questions.md`](docs/acceptance_questions.md) | The reliability test set for that version |
+| [`docs/command_inventory.md`](docs/command_inventory.md) | Registered commands against Frédo's specification |
 | [`docs/specifications.md`](docs/specifications.md) | How it is built |
 | [`docs/implementation_status.md`](docs/implementation_status.md) | What is built today |
 | [`docs/planning.md`](docs/planning.md) | Gaps and next development phases |

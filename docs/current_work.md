@@ -1,10 +1,19 @@
-# Immediate improvements — status
+# Current work
 
-All P1–P15 items from the planning pass are **implemented** (July 2026).
-Documentation is aligned with the codebase — see
-[`implementation_status.md`](implementation_status.md) (Planning pass P1–P15).
+## Next up: V2, the reliable console
 
-## Completed
+Scoped 2026-08-25 with Frédo and Soushi. The problem being solved is that Tramice invents data, which also corrupts her identification of who she is talking to, and that the Game cannot really be played through conversation because the agent cannot reach the services that hold the data.
+
+- Requirements: [`requirements_v2.md`](requirements_v2.md)
+- Acceptance test set: [`acceptance_questions.md`](acceptance_questions.md)
+- Command reconciliation against Frédo's specification: [`command_inventory.md`](command_inventory.md)
+
+Explicitly deferred: the datastructure redesign (`Tramices`, `Wishes`, `Anon_index`, `Volios`, `Events`), the transport gateway, `/game`, and the stylistic complaints listed in `requirements_v2.md` § 6.
+
+## Previous pass: P1 to P15
+
+All P1 to P15 items from the July 2026 planning pass are implemented. See
+[`implementation_status.md`](implementation_status.md).
 
 | Pri | Task | Status |
 |---|---|---|
@@ -19,10 +28,12 @@ Documentation is aligned with the codebase — see
 | P9 | Dual harness (procedural vs creative) | Done |
 | P10 | `/mode` per channel | Done |
 | P11 | Tool failure feedback | Done |
-| P12 | Hourly matchmaking → Échos | Done |
+| P12 | Hourly matchmaking to Échos | Done |
 | P13 | `/mondo view:stats` | Done |
 | P14 | Public RAG export + `/mondo view:knowledge` | Done |
 | P15 | Guild metadata tools | Done |
+
+Two of these are reported broken from the lab and are re-opened as R6.2 and R6.3 in the V2 requirements: `/todo` reports an empty list where tasks exist, and `/mode` hides its options until clicked.
 
 ## Smoke checklist (manual)
 

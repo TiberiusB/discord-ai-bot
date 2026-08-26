@@ -10,6 +10,11 @@
 
 ---
 
+> **Next slice.** The requirements for the version currently being built live in
+> [`requirements_v2.md`](requirements_v2.md), with their test set in
+> [`acceptance_questions.md`](acceptance_questions.md). This document remains the full
+> service catalog and is not superseded.
+
 ## 1. Context
 
 ### 1.1 The game — La Guilde des Tramarades `[knowledge]`
