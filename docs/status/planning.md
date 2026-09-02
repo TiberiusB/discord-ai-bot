@@ -3,7 +3,7 @@
 > Forward-looking development plan.  
 > For what is already built, see [`implementation_status.md`](implementation_status.md).  
 > For product intent and requirement IDs, see [`requirements/`](../requirements/README.md).  
-> For schemas, APIs, and acceptance criteria, see [`specifications.md`](../design/specifications.md).
+> For schemas, APIs, and acceptance criteria, see the [design docs](../design/README.md).
 
 Last updated: 17 July 2026.
 
@@ -14,7 +14,7 @@ Last updated: 17 July 2026.
 This plan answers three questions for the engineering team:
 
 1. **Where are the gaps** between the current codebase and what
-   [`requirements/`](../requirements/README.md) / [`specifications.md`](../design/specifications.md)
+   [`requirements/`](../requirements/README.md) / [`design/`](../design/README.md)
    describe?
 2. **What must happen next** now that the bot is connected and smoke-tested?
 3. **What comes after** the first live iteration, in sensible development phases?
@@ -117,7 +117,7 @@ leftovers: [`post_mvp.md`](post_mvp.md).
 
 ### Explicitly out of scope (v1)
 
-Per [`requirements/README.md`](../requirements/README.md) § Out of scope and [`specifications.md`](../design/specifications.md) §13:
+Per [`requirements/README.md`](../requirements/README.md) § Out of scope and [`design/`](../design/README.md) §13:
 
 - Graphical Mondo / animated tramice UI
 - Distributed HOP ledger across servers
@@ -191,7 +191,7 @@ Remaining Phase 1 work is operational validation and UX polish:
 ### Phase 2 — Governance and privacy completion
 
 **Goal:** Close the largest gaps vs [`governance.md`](../requirements/governance.md) and
-[`specifications.md`](../design/specifications.md) §10.
+[`security-privacy.md`](../design/security-privacy.md).
 
 | Work item | Req / spec | Deliverable |
 |-----------|------------|-------------|
@@ -277,7 +277,7 @@ Not scheduled; revisit after a successful playtest season.
 1. **Starting work?** Read [`implementation_status.md`](implementation_status.md) for
    what exists, then pick the current phase above (**Phase 1**).
 2. **Design question?** Check [`requirements/`](../requirements/README.md) for *what* and
-   [`specifications.md`](../design/specifications.md) for *how*.
+   [`design/`](../design/README.md) for *how*.
 3. **Closing a gap?** Add the requirement ID to your PR description and update
    the gap table in this doc when the phase completes.
 4. **Scope creep?** Compare against requirements §8 and specifications §13 before

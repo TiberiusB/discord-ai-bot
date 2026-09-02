@@ -54,7 +54,7 @@ and not multi-server sync (all explicitly out of scope for v1).
 | [`docs/requirements/reliability.md`](docs/requirements/reliability.md) | What the next version must do, and why |
 | [`docs/testing/acceptance_questions.md`](docs/testing/acceptance_questions.md) | The reliability test set for that version |
 | [`docs/design/command_inventory.md`](docs/design/command_inventory.md) | Registered commands against Frédo's specification |
-| [`docs/design/specifications.md`](docs/design/specifications.md) | How it is built |
+| [`docs/design/`](docs/design/README.md) | How it is built, one file per concern |
 | [`docs/status/implementation_status.md`](docs/status/implementation_status.md) | What is built today |
 | [`docs/status/planning.md`](docs/status/planning.md) | Gaps and next development phases |
 | [`docs/status/post_mvp.md`](docs/status/post_mvp.md) | Post-MVP wishlist outcome + deferred leftovers |
@@ -527,7 +527,7 @@ The [`docs/`](docs/README.md) hub explains how the documentation is organised.
 | Document | Contents |
 |----------|----------|
 | [`docs/requirements/`](docs/requirements/README.md) | Service catalog, one file per domain |
-| [`docs/design/specifications.md`](docs/design/specifications.md) | Schemas, APIs, acceptance criteria |
+| [`docs/design/`](docs/design/README.md) | Architecture, data model, services, tools, configuration |
 | [`docs/status/implementation_status.md`](docs/status/implementation_status.md) | Built features and known gaps |
 | [`docs/status/planning.md`](docs/status/planning.md) | Phased roadmap (connect → playtest → hardening) |
 | [`docs/status/post_mvp.md`](docs/status/post_mvp.md) | Post-MVP wishlist outcome + deferred leftovers |

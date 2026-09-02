@@ -80,7 +80,7 @@ Approximate size: **~8,600 lines** of Python application code (excluding
 ## Milestone completion
 
 Source of truth for milestone definitions:
-[`specifications.md`](../design/specifications.md) §12.
+[`milestones-2026-07.md`](milestones-2026-07.md).
 
 | Milestone | Focus | Status |
 |-----------|-------|--------|
@@ -327,7 +327,7 @@ Not present as a separate module: `services/platform.py` (logic lives in `bot/`)
 | Checkpoint cleanup | `checkpoints.py` | Delete threads on `/forgetme` |
 | Chroma | `data/chroma/` | `docs`, `history`, and `web` collections |
 
-Schemas match [`specifications.md`](../design/specifications.md) §4.
+Schemas match [`data-model.md`](../design/data-model.md).
 
 ### MCP servers (`mcp_servers/`)
 
@@ -444,7 +444,7 @@ Initial connect checklist is **complete** for the lab guild. Ongoing ops:
 | [`implementation_status.md`](implementation_status.md) | What is built today (this document) |
 | [`planning.md`](planning.md) | Gaps and phased future development |
 | [`requirements/`](../requirements/README.md) | What the bot must do (service tags, NFRs) |
-| [`specifications.md`](../design/specifications.md) | How it is built (schemas, APIs, acceptance criteria) |
+| [`design/`](../design/README.md) | How it is built (schemas, APIs, acceptance criteria) |
 | [`post_mvp.md`](post_mvp.md) | Post-MVP wishlist outcome + deferred leftovers only |
 | [`ai_logging_notice.md`](../operations/ai_logging_notice.md) | Template notice for server members |
 | [`README.md`](../README.md) | Quick start, commands, deployment |
