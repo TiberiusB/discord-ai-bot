@@ -22,3 +22,4 @@ audit.log
 # Local scratch
 .local/
 .worktrees/
+book/
