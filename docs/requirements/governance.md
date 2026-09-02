@@ -47,6 +47,7 @@ Decision-making, norms, conflict resolution, and deliberation support.
 | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | GOV-10 | SHOULD maintain configurable **social norms** defining what topics/data are always private vs always public. Norms MUST be readable by all trammers.           |
 | GOV-11 | SHOULD provide **admin-invokable bot functions** (slash commands or equivalent) for server admins to adapt social norms. `[administration]`                    |
+| GOV-13 | A change to the Game's design relative to the founding proposal (*Un jeu pour système*, latramice.net, January 2026) MUST be made by a tramarade holding the **@Architecture** role in the lab. Frédo, 2026-09-02. |
 | GOV-12 | Bot actions (logging, summarizing, matchmaking, profile display) MUST be coherent with current social norms. `[community-memory]` `[identity]` `[matchmaking]` |
 
 

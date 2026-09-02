@@ -86,12 +86,13 @@ The commands present in both the code and Frédo's specification are guaranteed.
 
 ### R7. Enrolment by sponsorship `should`
 
-A newcomer who direct-messages Tramice asking to join the network is handled as follows.
+A newcomer who direct-messages the on-boarding tramice (Frédo, 2026-09-02: "a T-10 ??"; in the lab, Tramice721) asking to join the network is handled as follows.
 
 - **R7.1** She asks whether they know someone already in the network.
 - **R7.2** If they name someone, she sends a notification through that person's tramice. In the current lab, that is a DM from the bot to the named tramarade, who confirms or declines.
 - **R7.3** If they know no one, she places them on a waiting list and tells them so plainly.
 - **R7.4** No action on the server is granted before the *promesse d'utilisation conviviale* is made.
+- **R7.5** The waiting list, anonymized, is sent to a local T-8 as volios; the on-boarding tramice then intercedes. Added by Frédo, 2026-09-02.
 - **Open** Who reviews the waiting list, and on what cadence, is not decided.
 
 ## Non-functional requirements

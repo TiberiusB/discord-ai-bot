@@ -13,12 +13,12 @@ The bot SHOULD help the community *simulate* the game loop. Ledger accuracy is
 | GME-1 | SHOULD be aware of the **weekly cycle**: Missions announced by **Thursday 17:00**; investment window **Thursday 17:00 → Sunday midnight**; budgets finalized Sunday midnight. |
 | GME-2 | SHOULD help enterprises publish **Missions** (HOP + material needs) and help trammers track enterprises they support. `[identity]` `[ecosystem-mapping]`                      |
 | GME-3 | SHOULD support **quests** (unforeseen, real-time needs) and their retroactive recognition the following week.                                                                 |
-| GME-4 | MAY compute/announce the weekly **influence budget** (avg of previous week's HOPs +20%, min 5, max 100) and the **AUM** (5 HOPs).                                             |
+| GME-4 | MAY compute/announce the weekly **support budget** (*budget d'appui*, formerly "budget d'influence"; avg of previous week's HOPs +20%, min 5, max 100) and the **AUM** (5 HOPs).                                             |
 | GME-5 | Any HOP/booklet figures the bot reports MUST respect rules in §5.2–§5.3 (no negative balances, hundredths precision, individual cap 99 999,99 HOPs).                          |
 | GME-6 | SHOULD explain physical **booklets** (Recognition, Mission, Quests, Allocation) without replacing them. `[knowledge]`                                                         |
 
 
-**Domain concepts:** HOP, weekly cycle, booklets, AUM, influence budget. See §5.2–§5.3.
+**Domain concepts:** HOP, weekly cycle, booklets, AUM, support budget (*budget d'appui*). See §5.2–§5.3.
 
 ## HOP — the currency `[game]`
 
@@ -31,6 +31,6 @@ The bot SHOULD help the community *simulate* the game loop. Ledger accuracy is
 
 ## Weekly cycle `[game]`
 
-- **Thursday 17:00:** influence budget per trammer = avg HOPs created previous week **+20%** (adjustable); **min 5, max 100**. Enterprises post **Missions**.
+- **Thursday 17:00:** support budget per trammer = avg HOPs created previous week **+20%** (adjustable); **min 5, max 100**. Enterprises post **Missions**.
 - **Thursday → Sunday midnight:** investment window. Placements in enterprises **other than own**. Unplaced HOPs auto-distribute along trend, capped by enterprise requests.
 - **Sunday midnight:** allocations finalized into **Booklets de Mission**. HOPs become real only after peer-validated work. Unused Mission HOPs evaporate (no carry-over without extension).

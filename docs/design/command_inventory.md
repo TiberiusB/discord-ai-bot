@@ -33,11 +33,11 @@ Thirteen commands appear in the working document and nowhere in the code.
 
 `/alarm` · `/comment` · `/dico` · `/enterprise` · `/freq` · `/help` · `/idea` · `/infos` · `/note` · `/quest` · `/report` · `/team` · `/week`
 
-Of these, `/week` is in scope for the next version by decision of 2026-08-25. `/game` is explicitly deferred. The other eleven are unscheduled.
+Of these, `/week` is in scope for the next version by decision of 2026-08-25. `/game` is explicitly deferred. On 2026-09-02 Frédo asked that the other eleven all be scheduled too; the order is for the project-management pass.
 
 ## Implemented but unspecified
 
-Seventeen top-level commands plus one group exist in the code without a counterpart in the document. Most are operational rather than game-facing.
+Seventeen top-level commands plus one group exist in the code without a counterpart in the document. Most are operational rather than game-facing. On 2026-09-02 Frédo asked that they be documented alongside the others, and that every command name be English.
 
 `/ask` · `/event` · `/forgetme` · `/health` · `/identity` · `/model` · `/my-model` · `/norms` · `/poll` · `/reindex` · `/say` · `/set-norm` · `/signal` · `/son` · `/summarize` · `/thread` · `/vote` · `web-source add|list|remove`
 
@@ -48,7 +48,10 @@ This is not drift to be deleted. Several of these commands are load-bearing (`/i
 | Current | Requested | Status |
 |---|---|---|
 | `/signal` | `/report` | Not done |
-| `/son` | `sound`, or removed entirely | Not done |
+| `/son` | `/sound`, then removed entirely (2026-09-02) | Not done |
+| `/set-norm` | `/norm-set` (Frédo's edited table, 2026-09-02) | Not done |
+| `/support place` | `/supportplace` (same table) | Not done |
+| `/event` | struck through in the same table; fate to confirm with Frédo | Not done |
 | `/identity` parameters (`membre`, `autre`) | English parameter names | Not done. See `bot/commands.py:994`. |
 | `/volio` | add alias `/wish` | Not done |
 
