@@ -37,7 +37,7 @@
 
 ---
 
-## 1. Traceability
+## Traceability
 
 Each design file maps to requirement service tags and IDs. The original single-file table was one section off from its own headings; this one is rebuilt from the files as they are.
 
@@ -54,14 +54,14 @@ Each design file maps to requirement service tags and IDs. The original single-f
 | [`../status/milestones-2026-07.md`](../status/milestones-2026-07.md) | §12, §15 | all | milestones M0 to M6 |
 ---
 
-## 13. Out of scope (v1)
+## Out of scope (v1)
 
 Per requirements [§8](scheduler.md): graphical Mondo UI, distributed HOP ledger, legal/tax
 accounting, physical booklets, biometric identity, multi-server sync protocol.
 
 ---
 
-## 14. Open decisions (blockers)
+## Open decisions (blockers)
 
 
 | #   | Decision                                      | Status / recommendation        |
@@ -75,7 +75,7 @@ accounting, physical booklets, biometric identity, multi-server sync protocol.
 
 ---
 
-## 16. Glossary (spec usage)
+## Glossary (spec usage)
 
 
 | Term    | Spec meaning                                               |

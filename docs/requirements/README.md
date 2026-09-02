@@ -12,7 +12,7 @@
 
 > **Current slice.** The version being built is [`reliability.md`](reliability.md) (the reliable console), with its test set in [`../testing/acceptance_questions.md`](../testing/acceptance_questions.md). The domain files remain the full service catalog and are not superseded.
 
-## 1. Context
+## Context
 
 ### The game — La Guilde des Tramarades `[knowledge]`
 
@@ -53,7 +53,7 @@ sole master of their assistant), foreshadowing the final per-user console.
 
 ---
 
-## 2. Service catalog
+## Service catalog
 
 The bot's functionality is organized as **services to the community**. Each
 service is reflected in the local AI infrastructure and agent harness (tools,
@@ -131,7 +131,7 @@ One file per service domain; the tag in each heading is the one used throughout 
 
 ---
 
-## 7. Implementation mapping (by service)
+## Implementation mapping (by service)
 
 
 | Service               | Plan component                                                                     |
@@ -150,7 +150,7 @@ One file per service domain; the tag in each heading is the one used throughout 
 
 ---
 
-## 8. Out of scope
+## Out of scope
 
 
 | Item                                                                | Notes                                                 |
@@ -163,7 +163,7 @@ One file per service domain; the tag in each heading is the one used throughout 
 
 ---
 
-## 9. Open questions
+## Open questions
 
 
 | #   | Question                                                       | Affects                                 |
