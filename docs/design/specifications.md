@@ -1,6 +1,6 @@
 # Specifications — Tramice721 Discord Bot
 
-> Technical specification derived from `[requirements.md](requirements.md)`.
+> Technical specification derived from [`requirements/`](../requirements/README.md).
 > This document defines **how** the system is built. Requirements define **what**
 > it must do. The implementation plan (`.cursor/plans/discord_ai_bot_4b8e92eb.plan.md`)
 > defines **when** (milestones M0–M6).
@@ -180,7 +180,7 @@ discord-ai-bot/
 │   ├── app.sqlite
 │   ├── checkpoints.sqlite
 │   └── chroma/
-├── docs/                    # RAG source: jeu.pdf, requirements.md, specifications.md
+├── docs/                    # RAG source, recursive: game/jeu.pdf, requirements/, design/, status/, testing/, operations/
 ├── config.yaml
 ├── .env.example
 └── requirements.txt
@@ -636,7 +636,7 @@ Managed by `langgraph-checkpoint-sqlite`; no manual schema in spec.
 
 | Collection | Source | Chunk strategy |
 | ---------- | ------ | -------------- |
-| `docs` | `docs/*.pdf`, `docs/*.md`, `docs/*.txt` | 800 tokens, 120 overlap; metadata: `source`, `page` |
+| `docs` | `docs/**/*.pdf`, `docs/**/*.md`, `docs/**/*.txt` (recursive) | 800 tokens, 120 overlap; metadata: `source`, `page` |
 | `history` | `messages` where `deleted=0` and policy allows | 400 tokens; metadata: `channel_id`, `user_id`, `created_at` |
 | `web` | Admin seed URLs (`web_sources` registry) | Same as `docs`; metadata: `seed_url`, `source_url`, `title`, `fetched_at`, `depth` |
 
@@ -1170,7 +1170,7 @@ Structured JSON to stdout (M6): `level`, `event`, `guild_id`, `channel_id`,
 
 ### M3 — RAG `[knowledge]`
 
-- [x] `docs/jeu.pdf` + `requirements.md` ingested into Chroma
+- [x] `docs/game/jeu.pdf` + `requirements/` ingested into Chroma
 - [x] `/ask` about HOP / weekly cycle returns grounded answer with source hint
 - [x] `/reindex` rebuilds index (scoped: docs, web, or all)
 - [x] Admin-curated web RAG: `/web-source`, Chroma `web`, `refresh_web_sources`
@@ -1234,8 +1234,8 @@ accounting, physical booklets, biometric identity, multi-server sync protocol.
 
 ## 15. Post-MVP additions (July 2026)
 
-Implemented after M6; see [`implementation_status.md`](implementation_status.md)
-(Post-MVP round + Planning pass P1–P15). Deferred leftovers: [`post_mvp.md`](post_mvp.md).
+Implemented after M6; see [`implementation_status.md`](../status/implementation_status.md)
+(Post-MVP round + Planning pass P1–P15). Deferred leftovers: [`post_mvp.md`](../status/post_mvp.md).
 
 | Area | Deliverable |
 | ---- | ----------- |

@@ -56,7 +56,7 @@ and not multi-server sync (all explicitly out of scope for v1).
 
 The bot is **live on the lab guild** (*Laboratoire tramiciel n°721*). Operators
 should keep the AI-logging notice posted
-([`ai_logging_notice.md`](ai_logging_notice.md)) and maintain
+([`ai_logging_notice.md`](../operations/ai_logging_notice.md)) and maintain
 `interact_allowlist` / `log_allowlist` in `config.yaml` as the playtest expands.
 
 ---
@@ -80,7 +80,7 @@ Approximate size: **~8,600 lines** of Python application code (excluding
 ## Milestone completion
 
 Source of truth for milestone definitions:
-[`specifications.md`](specifications.md) §12.
+[`specifications.md`](../design/specifications.md) §12.
 
 | Milestone | Focus | Status |
 |-----------|-------|--------|
@@ -327,7 +327,7 @@ Not present as a separate module: `services/platform.py` (logic lives in `bot/`)
 | Checkpoint cleanup | `checkpoints.py` | Delete threads on `/forgetme` |
 | Chroma | `data/chroma/` | `docs`, `history`, and `web` collections |
 
-Schemas match [`specifications.md`](specifications.md) §4.
+Schemas match [`specifications.md`](../design/specifications.md) §4.
 
 ### MCP servers (`mcp_servers/`)
 
@@ -430,7 +430,7 @@ Initial connect checklist is **complete** for the lab guild. Ongoing ops:
 
 1. Keep `ollama serve` and the bot process running (`./run.sh`, systemd, or Docker).
 2. Maintain `channels.interact_allowlist` and `channels.log_allowlist` as salons evolve.
-3. Keep the AI-logging notice visible ([`ai_logging_notice.md`](ai_logging_notice.md)).
+3. Keep the AI-logging notice visible ([`ai_logging_notice.md`](../operations/ai_logging_notice.md)).
 4. Before releases: `PYTHONPATH=. pytest tests/ -q`, then smoke `/ask` + `/health`.
 5. Use `/web-source` / `/reindex` when curated knowledge changes.
 6. Watch `/health` (gateway, queue, capability scan, job/event errors) after deploys.
@@ -443,12 +443,12 @@ Initial connect checklist is **complete** for the lab guild. Ongoing ops:
 |----------|------|
 | [`implementation_status.md`](implementation_status.md) | What is built today (this document) |
 | [`planning.md`](planning.md) | Gaps and phased future development |
-| [`requirements.md`](requirements.md) | What the bot must do (service tags, NFRs) |
-| [`specifications.md`](specifications.md) | How it is built (schemas, APIs, acceptance criteria) |
+| [`requirements/`](../requirements/README.md) | What the bot must do (service tags, NFRs) |
+| [`specifications.md`](../design/specifications.md) | How it is built (schemas, APIs, acceptance criteria) |
 | [`post_mvp.md`](post_mvp.md) | Post-MVP wishlist outcome + deferred leftovers only |
-| [`ai_logging_notice.md`](ai_logging_notice.md) | Template notice for server members |
+| [`ai_logging_notice.md`](../operations/ai_logging_notice.md) | Template notice for server members |
 | [`README.md`](../README.md) | Quick start, commands, deployment |
-| [`jeu.pdf`](jeu.pdf) | Game design (RAG source) |
+| [`jeu.pdf`](../game/jeu.pdf) | Game design (RAG source) |
 
 ---
 
@@ -458,6 +458,6 @@ Phase 0 (connect + smoke) is done. See [`planning.md`](planning.md) for
 **Phase 1 — playtest hardening** and later phases. This document tracks
 **current state**; the planning doc tracks **what to build next**.
 
-For questions about design intent, start with `requirements.md` §1–3 (context and
+For questions about design intent, start with `requirements/README.md` (context and
 persona). For “is feature X built?”, check the service file and `bot/commands.py`
 registration, then this document’s gaps table.

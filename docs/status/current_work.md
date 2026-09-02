@@ -4,11 +4,11 @@
 
 Scoped 2026-08-25 with Frédo and Soushi. The problem being solved is that Tramice invents data, which also corrupts her identification of who she is talking to, and that the Game cannot really be played through conversation because the agent cannot reach the services that hold the data.
 
-- Requirements: [`requirements_v2.md`](requirements_v2.md)
-- Acceptance test set: [`acceptance_questions.md`](acceptance_questions.md)
-- Command reconciliation against Frédo's specification: [`command_inventory.md`](command_inventory.md)
+- Requirements: [`reliability.md`](../requirements/reliability.md)
+- Acceptance test set: [`acceptance_questions.md`](../testing/acceptance_questions.md)
+- Command reconciliation against Frédo's specification: [`command_inventory.md`](../design/command_inventory.md)
 
-Explicitly deferred: the datastructure redesign (`Tramices`, `Wishes`, `Anon_index`, `Volios`, `Events`), the transport gateway, `/game`, and the stylistic complaints listed in `requirements_v2.md` § 6.
+Explicitly deferred: the datastructure redesign (`Tramices`, `Anon_index`, `Volios`, `Events`; Frédo asked on 2026-09-02 that `Volios` and `Events` follow in the next PR rather than wait), the transport gateway, `/game`, and the stylistic complaints listed in `reliability.md` § Explicitly out of scope.
 
 ## Previous pass: P1 to P15
 

@@ -1,10 +1,12 @@
-# V2 requirements: the reliable console
+# Reliability: the reliable console (V2 slice)
 
-Scope for the next version of Tramice721, decided in a requirements discovery session with Frédo and Soushi on 2026-08-25. It supersedes nothing in [`requirements.md`](requirements.md); it selects the next slice and adds what that slice needs.
+Part of the [requirements](README.md) for the Tramice721 Discord bot. Requirements use **MUST** / **SHOULD** / **MAY** (RFC-2119 sense).
+
+Scope for the next version of Tramice721, decided in a requirements discovery session with Frédo and Soushi on 2026-08-25 and folded into this document on 2026-09-02 (it was `requirements_v2.md`, then part 10 of `requirements.md`; git holds the history). It supersedes nothing in parts 1 to 9; it selects the next slice and adds what that slice needs.
 
 **One sentence.** Tramice stops inventing, learns who she is talking to, and answers questions about the data she already holds from that data or not at all.
 
-## 1. Why this slice
+## Why this slice
 
 Three complaints were raised independently and turn out to be one defect with three faces.
 
@@ -18,7 +20,7 @@ The agent's entire toolset today is seven tools: `list_mondo`, `get_playtest_sta
 
 There is also no refusal path at all. `ai/guardrails.py` enforces feminine self-reference and filters link hosts; nothing in `ai/` implements "answer from the store or decline".
 
-## 2. The governing rule
+## The governing rule
 
 Approved by Frédo and Soushi, 2026-08-25:
 
@@ -26,7 +28,7 @@ Approved by Frédo and Soushi, 2026-08-25:
 
 Everything below is a consequence of that rule.
 
-## 3. Functional requirements
+## Functional requirements
 
 ### R1. The speaker is known `must`
 
@@ -54,7 +56,7 @@ When no tool can answer, she says she does not hold the data. She does not expla
 - **R3.1** A retrieval-or-refuse check sits between the model and the reply for any turn classified as data-bearing.
 - **R3.2** The decline is one short sentence in her voice. Register: "Je n'ai pas cette donnée." not "En tant qu'assistante IA, je n'ai pas accès à...".
 - **R3.3** She may offer to note the question, but she never speculates.
-- **Acceptance** See [`acceptance_questions.md`](acceptance_questions.md). Every question in that file must be answered from a tool result or declined. A third outcome is a failure.
+- **Acceptance** See [`acceptance_questions.md`](../testing/acceptance_questions.md). Every question in that file must be answered from a tool result or declined. A third outcome is a failure.
 
 ### R4. The private console, simulated `must`
 
@@ -74,7 +76,7 @@ In a public channel she answers about the state of the Game using aggregates and
 
 ### R6. The eight shared commands work, and `/week` arrives `should`
 
-The commands present in both the code and Frédo's specification are guaranteed. See [`command_inventory.md`](command_inventory.md).
+The commands present in both the code and Frédo's specification are guaranteed. See [`command_inventory.md`](../design/command_inventory.md).
 
 - **R6.1** The eight overlapping commands pass a manual smoke pass: `/volio`, `/echoes`, `/mission`, `/mondo`, `/mode`, `/todo`, `/support`, `/game-week`.
 - **R6.2** `/todo` lists the salon's tasks. The reported symptom is an empty list where tasks exist.
@@ -92,25 +94,25 @@ A newcomer who direct-messages Tramice asking to join the network is handled as 
 - **R7.4** No action on the server is granted before the *promesse d'utilisation conviviale* is made.
 - **Open** Who reviews the waiting list, and on what cadence, is not decided.
 
-## 4. Non-functional requirements
+## Non-functional requirements
 
 - **N1. No fabricated values.** A number, name, date or amount in a reply must trace to a tool result from the same turn. This is testable and it is the point of the release.
 - **N2. Voice preserved.** Declines are in her register. The reliability work must not turn her into a form.
 - **N3. Local-first unchanged.** Ollama, Chroma, SQLite. No new external dependency.
 - **N4. Model-portable.** The refusal path is enforced outside the model, so a model swap cannot remove it.
 
-## 5. Constraints
+## Constraints
 
 - Two unpaid part-time volunteers. Scope accordingly.
-- The datastructure redesign the working document calls for (`Tramices`, `Wishes`, `Anon_index`, `Volios`, `Events`) is **not** in this version. Only the tables the tools above need are touched.
+- The datastructure redesign the working document calls for (`Tramices`, `Anon_index`, `Volios`, `Events`; `Volios` absorbs the former `Wishes`) is **not** in this version. Only the tables the tools above need are touched. Amended 2026-09-02: Frédo asked that `Volios` and `Events` not be deferred; they become the slice that follows this one, in their own PR.
 - Discord remains the only transport. The transport gateway is a later slice.
 - The tramice series work (`T-0` to `T-9`) is design, not code, in this version. See the design note for its current state.
 
-## 6. Explicitly out of scope
+## Explicitly out of scope
 
 Stylistic complaints from the working document (repetition, "Je propose, tu disposes" on every placement, second-person self-reference, the restart changelog message, local weather, thumbs-down capture for LoRA). They are real and they are a separate PR, because mixing polish with a correctness release makes both harder to review.
 
-## 7. Open questions carried forward
+## Open questions carried forward
 
 1. Who owns the tramice register: `T-0` holds it, a `T-8` allocates and locks the tramicule, every `T-8` mirrors the active list. Three series, one record.
 2. How the roughly twelve universal game variables stay synchronised across tramices, and what resolves a divergence.
