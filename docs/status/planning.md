@@ -5,7 +5,7 @@
 > For product intent and requirement IDs, see [`requirements/`](../requirements/README.md).  
 > For schemas, APIs, and acceptance criteria, see the [design docs](../design/README.md).
 
-Last updated: 17 July 2026.
+Last updated: 17 July 2026. This is the July plan; the position as of today and the slice in progress are in [`current_work.md`](current_work.md), which wins where the two disagree.
 
 ---
 

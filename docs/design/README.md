@@ -80,7 +80,7 @@ accounting, physical booklets, biometric identity, multi-server sync protocol.
 
 | Term    | Spec meaning                                               |
 | ------- | ---------------------------------------------------------- |
-| Trammer | Discord server member / player (requirements: *tramarade*) |
+| Trammer | Discord server member / player. *Tramarade* is the French equivalent per Frédo's lexicon; English docs use either, French strings always *tramarade* |
 | Tramice | Personal AI console; this bot simulates it                 |
 | Volio   | Profile chest: wishes, talents, offers, requests           |
 | Échos   | Matchmaking inbox notifications                            |

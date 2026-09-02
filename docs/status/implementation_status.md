@@ -439,17 +439,7 @@ Initial connect checklist is **complete** for the lab guild. Ongoing ops:
 
 ## Documentation map
 
-| Document | Role |
-|----------|------|
-| [`implementation_status.md`](implementation_status.md) | What is built today (this document) |
-| [`planning.md`](planning.md) | Gaps and phased future development |
-| [`requirements/`](../requirements/README.md) | What the bot must do (service tags, NFRs) |
-| [`design/`](../design/README.md) | How it is built (schemas, APIs, acceptance criteria) |
-| [`post_mvp.md`](post_mvp.md) | Post-MVP wishlist outcome + deferred leftovers only |
-| [`ai_logging_notice.md`](../operations/ai_logging_notice.md) | Template notice for server members |
-| [`README.md`](../README.md) | Quick start, commands, deployment |
-| [`jeu.pdf`](../game/jeu.pdf) | Game design (RAG source) |
-
+The map lives in one place, [`docs/README.md`](../README.md); this document no longer restates it.
 ---
 
 ## Suggested next work

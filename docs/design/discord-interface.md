@@ -42,6 +42,8 @@ Config key: `triggers.prefix` default `!ai`.
 
 ### 7.3 Slash commands
 
+> This table describes the commands the code registers today. Renames decided on 2026-08-25 (`/game-week` to `/week`, `/signal` to `/report`, `/son` removed, all names in English) are tracked in [`command_inventory.md`](command_inventory.md) and land with the reliable-console implementation.
+
 
 | Command        | Service        | Access | Description                                  |
 | -------------- | -------------- | ------ | -------------------------------------------- |

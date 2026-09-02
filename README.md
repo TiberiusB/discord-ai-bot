@@ -524,15 +524,14 @@ Admin health: `/health` in Discord.
 
 The [`docs/`](docs/README.md) hub explains how the documentation is organised.
 
-| Document | Contents |
-|----------|----------|
-| [`docs/requirements/`](docs/requirements/README.md) | Service catalog, one file per domain |
-| [`docs/design/`](docs/design/README.md) | Architecture, data model, services, tools, configuration |
-| [`docs/status/implementation_status.md`](docs/status/implementation_status.md) | Built features and known gaps |
-| [`docs/status/planning.md`](docs/status/planning.md) | Phased roadmap (connect → playtest → hardening) |
-| [`docs/status/post_mvp.md`](docs/status/post_mvp.md) | Post-MVP wishlist outcome + deferred leftovers |
-| [`docs/operations/ai_logging_notice.md`](docs/operations/ai_logging_notice.md) | Template notice for server members |
-| [`docs/game/jeu.pdf`](docs/game/jeu.pdf) | Game design (RAG source) |
+| Folder | What it holds |
+|---|---|
+| [`docs/requirements/`](docs/requirements/README.md) | What the bot must do, one file per domain; the current slice is [`reliability.md`](docs/requirements/reliability.md) |
+| [`docs/design/`](docs/design/README.md) | How it is built, one file per concern |
+| [`docs/testing/`](docs/testing/acceptance_questions.md) | The acceptance question set |
+| [`docs/status/`](docs/status/current_work.md) | What is built, what is next, what was deferred |
+| [`docs/operations/`](docs/operations/ai_logging_notice.md) | Notices for a live server |
+| [`docs/game/`](docs/game/jeu.pdf) | The game design, RAG source |
 
 ---
 
