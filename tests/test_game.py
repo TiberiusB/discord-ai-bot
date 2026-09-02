@@ -1,5 +1,7 @@
 """Tests for game placement window and reallocation."""
 
+from datetime import datetime, timedelta
+
 import pytest
 
 from bot.config import Settings
@@ -16,6 +18,20 @@ def game_db(tmp_path):
     db = build_database(settings)
     yield db, settings
     db.close()
+
+
+def open_window_now(game: GameService, week_id: str) -> None:
+    """Widen the week's placement window around the real clock.
+
+    The window is Thursday 17:00 to Sunday midnight, so tests that place HOPs
+    would otherwise pass only on those days.
+    """
+    now = datetime.now(game.tz)
+    game.update_week_params(
+        week_id,
+        starts_at=(now - timedelta(days=1)).isoformat(),
+        invest_end=(now + timedelta(days=1)).isoformat(),
+    )
 
 
 def test_place_rejects_when_not_investing(game_db):
@@ -40,6 +56,7 @@ def test_self_placement_blocked(game_db):
     game = GameService(db, settings)
     week = game.get_current_week()
     game.set_week_status(week.week_id, "investing")
+    open_window_now(game, week.week_id)
     db.execute_app(
         "INSERT INTO trammers (discord_user_id, created_at, updated_at) "
         "VALUES ('u1', '2026-01-01', '2026-01-01')"
@@ -57,6 +74,7 @@ def test_place_hops_returns_total_on_entity(game_db):
     game = GameService(db, settings)
     week = game.get_current_week()
     game.set_week_status(week.week_id, "investing")
+    open_window_now(game, week.week_id)
     db.execute_app(
         "INSERT INTO trammers (discord_user_id, created_at, updated_at) "
         "VALUES ('u1', '2026-01-01', '2026-01-01'), ('u2', '2026-01-01', '2026-01-01')"

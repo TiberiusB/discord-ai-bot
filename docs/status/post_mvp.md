@@ -1,7 +1,7 @@
 # Post-MVP — Tramice721 Discord Bot
 
 > Wishlist outcome after milestones M0–M6 (July 2026).  
-> Last updated: 17 July 2026.  
+> Last updated: 17 July 2026. Current position: [`current_work.md`](current_work.md).  
 > **What was built** lives in [`implementation_status.md`](implementation_status.md)
 > (Post-MVP round + Implemented by layer). Roadmap: [`planning.md`](planning.md).
 

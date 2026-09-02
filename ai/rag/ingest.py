@@ -62,11 +62,13 @@ def _read_markdown(path: Path) -> list[Document]:
 
 
 def load_docs(docs_dir: Path) -> list[Document]:
-    """Load PDFs and Markdown files from ``docs/`` into LangChain Documents."""
+    """Load PDFs and Markdown files from ``docs/`` (recursively) into LangChain Documents."""
     documents: list[Document] = []
     if not docs_dir.exists():
         return documents
-    for path in sorted(docs_dir.iterdir()):
+    for path in sorted(docs_dir.rglob("*")):
+        if not path.is_file():
+            continue
         suffix = path.suffix.lower()
         try:
             if suffix == ".pdf":

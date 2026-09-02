@@ -18,3 +18,8 @@ audit.log
 # OS / editor
 .DS_Store
 *.swp
+
+# Local scratch
+.local/
+.worktrees/
+book/

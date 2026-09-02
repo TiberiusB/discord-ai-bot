@@ -50,11 +50,14 @@ and not multi-server sync (all explicitly out of scope for v1).
 
 | Doc | Purpose |
 |-----|---------|
-| [`docs/requirements.md`](docs/requirements.md) | What the bot must do |
-| [`docs/specifications.md`](docs/specifications.md) | How it is built |
-| [`docs/implementation_status.md`](docs/implementation_status.md) | What is built today |
-| [`docs/planning.md`](docs/planning.md) | Gaps and next development phases |
-| [`docs/post_mvp.md`](docs/post_mvp.md) | Post-MVP wishlist outcome + deferred leftovers |
+| [`docs/requirements/`](docs/requirements/README.md) | What the bot must do, one file per domain |
+| [`docs/requirements/reliability.md`](docs/requirements/reliability.md) | What the next version must do, and why |
+| [`docs/testing/acceptance_questions.md`](docs/testing/acceptance_questions.md) | The reliability test set for that version |
+| [`docs/design/command_inventory.md`](docs/design/command_inventory.md) | Registered commands against Frédo's specification |
+| [`docs/design/`](docs/design/README.md) | How it is built, one file per concern |
+| [`docs/status/implementation_status.md`](docs/status/implementation_status.md) | What is built today |
+| [`docs/status/planning.md`](docs/status/planning.md) | Gaps and next development phases |
+| [`docs/status/post_mvp.md`](docs/status/post_mvp.md) | Post-MVP wishlist outcome + deferred leftovers |
 
 
 **Status:** Application code for milestones M0–M6 and planning pass P1–P15 is
@@ -194,7 +197,7 @@ Then set `llm.model: tramice721` in `config.yaml`, or swap at runtime with
 ## Before you go live
 
 Complete this checklist before opening the bot to the wider playtest group. Details
-in [`docs/planning.md`](docs/planning.md) Phase 0.
+in [`docs/status/planning.md`](docs/status/planning.md) Phase 0.
 
 1. [Discord Developer Portal](https://discord.com/developers/applications): create
    app, enable **Message Content** + **Server Members** intents, invite with
@@ -203,7 +206,7 @@ in [`docs/planning.md`](docs/planning.md) Phase 0.
 3. Add salon channel IDs to `channels.interact_allowlist` (and
    `channels.log_allowlist` where messages should be logged) in `config.yaml`.
 4. Set `channels.summary_channel_id` if you want daily summaries or game posts.
-5. Post the AI-logging notice from [`docs/ai_logging_notice.md`](docs/ai_logging_notice.md).
+5. Post the AI-logging notice from [`docs/operations/ai_logging_notice.md`](docs/operations/ai_logging_notice.md).
 6. Run `pytest tests/ -q`, then start the bot and smoke-test `/ask`, a DM, `/health`, and (admin) `/web-source list`.
 7. (Optional, admin) Curate LaTramice.net: `/web-source add url:https://latramice.net/boutique-tramicielle-2/ label:Boutique`
 
@@ -296,7 +299,7 @@ persists in `app.sqlite` (`channel_modes`).
 
 Members' `/ask` queries search both local `docs/` and curated `web` sources via `search_knowledge`.
 
-### Choosing your model (`/my-model`) {#choosing-your-model-my-model}
+### Choosing your model (`/my-model`)
 
 Any trammer can pick which locally-installed Ollama model answers **their own**
 conversations, without affecting anyone else:
@@ -451,7 +454,7 @@ Approximate size: **~8,600 lines** of Python application code.
 - After repeated `/signal` reports, admins may receive a **DM suggestion**
   (never an automatic ban).
 - Post an **AI-logging notice** before going live —
-  [`docs/ai_logging_notice.md`](docs/ai_logging_notice.md).
+  [`docs/operations/ai_logging_notice.md`](docs/operations/ai_logging_notice.md).
 - Use `channels.interact_allowlist` and `channels.log_allowlist` to control
   where the bot chats vs where messages are logged.
 
@@ -519,16 +522,16 @@ Admin health: `/health` in Discord.
 
 ## Documentation
 
-| Document | Contents |
-|----------|----------|
-| [`docs/requirements.md`](docs/requirements.md) | Service catalog, persona, NFRs |
-| [`docs/specifications.md`](docs/specifications.md) | Schemas, APIs, acceptance criteria |
-| [`docs/implementation_status.md`](docs/implementation_status.md) | Built features and known gaps |
-| [`docs/planning.md`](docs/planning.md) | Phased roadmap (connect → playtest → hardening) |
-| [`docs/post_mvp.md`](docs/post_mvp.md) | Post-MVP wishlist outcome + deferred leftovers |
-| [`docs/ai_logging_notice.md`](docs/ai_logging_notice.md) | Template notice for server members |
-| [`docs/jeu.pdf`](docs/jeu.pdf) | Game design (RAG source) |
-| [`.cursor/plans/discord_ai_bot_4b8e92eb.plan.md`](.cursor/plans/discord_ai_bot_4b8e92eb.plan.md) | Original milestone plan (M0–M6) |
+The [`docs/`](docs/README.md) hub explains how the documentation is organised.
+
+| Folder | What it holds |
+|---|---|
+| [`docs/requirements/`](docs/requirements/README.md) | What the bot must do, one file per domain; the current slice is [`reliability.md`](docs/requirements/reliability.md) |
+| [`docs/design/`](docs/design/README.md) | How it is built, one file per concern |
+| [`docs/testing/`](docs/testing/acceptance_questions.md) | The acceptance question set |
+| [`docs/status/`](docs/status/current_work.md) | What is built, what is next, what was deferred |
+| [`docs/operations/`](docs/operations/ai_logging_notice.md) | Notices for a live server |
+| [`docs/game/`](docs/game/jeu.pdf) | The game design, RAG source |
 
 ---
 
