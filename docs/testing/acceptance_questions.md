@@ -6,7 +6,7 @@ The reliability test for the V2 release described in [`reliability.md`](../requi
 
 **Language.** The prose here is English like the rest of the technical documentation. The questions themselves are French because that is the language tramarades type in, and a test fixture has to be the real string.
 
-**Provenance.** Drafted by SoushAI on 2026-08-26 because the team had no such list. Revised 2026-09-02 with Frédo's first amendments (B4 read-back, H2 divergence flag) and a section I for enrolment by sponsorship (R7). It is still a starting point, not Frédo's list. He should cut what is wrong, add what is missing, and especially add the questions people have actually asked in the salons, which are worth more than anything invented here.
+**Provenance.** Drafted by SoushAI on 2026-08-26 because the team had no such list. Revised 2026-09-02 with Frédo's first amendments (B4 read-back, H2 divergence flag) and a section I for enrolment by sponsorship (R7); the earlier "40" and "44" counts were wrong, the table has 52 rows. It is still a starting point, not Frédo's list. He should cut what is wrong, add what is missing, and especially add the questions people have actually asked in the salons, which are worth more than anything invented here.
 
 **Surface column.** `DM` runs in direct messages (the simulated T-1). `SALON` runs in a public channel. Some questions appear twice on purpose, because the correct answer differs by surface, and that difference is the privacy boundary under test.
 
@@ -117,4 +117,4 @@ Tests R7 of the requirements. The asker is unregistered unless stated. Nothing o
 
 There is no harness yet. For the first pass this is a manual checklist: two people in a Discord test guild, one registered and one not, walking the table and marking pass or fail. Building a fixture-driven harness on top of it is worth doing once the answers stabilise, because the file is already shaped like a test suite.
 
-Count: 44 questions. Suggested pass bar for the release: every question in section F declines correctly, and no question anywhere produces a value that no tool returned.
+Count: 52 questions. Suggested pass bar for the release: every question in section F declines correctly, and no question anywhere produces a value that no tool returned.
