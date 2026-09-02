@@ -202,7 +202,7 @@ remain Phase 1 work — see [`planning.md`](planning.md).
 
 ## Architecture (as implemented)
 
-```
+```text
 Discord (salons · DMs · slash commands)
         │
         ▼

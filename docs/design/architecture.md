@@ -82,7 +82,7 @@ flowchart TB
 
 ### 2.4 Project layout
 
-```
+```text
 discord-ai-bot/
 ├── bot/
 │   ├── main.py              # entrypoint: config, Discord client, scheduler
