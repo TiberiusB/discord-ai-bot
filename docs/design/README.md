@@ -77,6 +77,8 @@ accounting, physical booklets, biometric identity, multi-server sync protocol.
 
 ## Glossary (spec usage)
 
+A quick reference for reading these design documents. The full bilingual vocabulary of the project, including the terms this table does not carry, is in [`../tramiciel/lexicon.md`](../tramiciel/lexicon.md).
+
 
 | Term    | Spec meaning                                               |
 | ------- | ---------------------------------------------------------- |

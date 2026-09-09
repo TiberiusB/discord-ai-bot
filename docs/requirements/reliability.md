@@ -26,7 +26,7 @@ Approved by Frédo and Soushi, 2026-08-25:
 
 > Free conversation runs unconstrained, because listening, riddles and encouragement have no fact to get wrong. Anything touching HOPs, missions, quests, volios, votes or decisions goes through a tool and comes back with sources, or comes back empty.
 
-Everything below is a consequence of that rule.
+Everything below is a consequence of that rule. It is also the same exemption the tramiciel protocol makes for *dialogues libres*, and the same doctrine as the invariant that the model is never the source of truth: see [`../tramiciel/protocol.md`](../tramiciel/protocol.md). If the vocabulary in this document is unfamiliar, the [lexicon](../tramiciel/lexicon.md) defines it.
 
 ## Functional requirements
 
@@ -35,7 +35,7 @@ Everything below is a consequence of that rule.
 The agent receives, on every turn, the identity of the person speaking: their `#trammer` if they have one, their Discord display name, and an explicit marker when no `#trammer` exists.
 
 - **R1.1** `state_in` carries `user_name` alongside `user_id`.
-- **R1.2** A resolver maps `(transport, external_id)` to a `#trammer`, or returns `unregistered`.
+- **R1.2** A resolver maps `(transport, external_id)` to a `#trammer`, or returns `unregistered`. This is also the transport gateway's foundation and what would let a T-8 match across a federation rather than inside one server; linking is an act of consent. See [`../tramiciel/protocol.md`](../tramiciel/protocol.md).
 - **R1.3** The system prompt receives the resolved identity as retrieved context, never as a guess.
 - **Acceptance** In a DM, "tu sais qui je suis?" returns the tramarade's own name for a registered person, and an offer to enrol for an unregistered one. Never a fabricated name.
 
@@ -115,9 +115,12 @@ Stylistic complaints from the working document (repetition, "Je propose, tu disp
 
 ## Open questions carried forward
 
-1. Who owns the tramice register: `T-0` holds it, a `T-8` allocates and locks the tramicule, every `T-8` mirrors the active list. Three series, one record.
-2. How the roughly twelve universal game variables stay synchronised across tramices, and what resolves a divergence.
-3. What protocol governs tramice-to-tramice communication.
-4. What exactly the Fabric is, and who runs it.
-5. Who proposes a new tramice, and whether a `T-9`'s expertise is ever verified.
-6. Sixty slips per recognition booklet, or sixty-four. The booklets page says 64, Annexe B says 60.
+These are the network-level questions this slice runs into. They are kept in full, with their owners, in [`../tramiciel/open-questions.md`](../tramiciel/open-questions.md); the short list below is what touches the reliable console.
+
+1. How the roughly twelve universal game variables stay synchronised across tramices, and what resolves a divergence.
+2. What protocol governs tramice-to-tramice communication, beyond the volio that already carries `is_systemic?` and `scope`.
+3. What exactly the Fabric is, and who runs it.
+4. Who proposes a new tramice. The expertise half is answered: it *is* verified, over time and on a free basis, *attributed and revocable*.
+5. Sixty slips per recognition booklet, or sixty-four. The booklets page says 64, Annexe B says 60.
+
+**Resolved since this list was written:** who owns the tramice register. A `T-0` verifies and locks the tramicule **and** holds the register; the `T-8`s mirror the list of active tramices. An earlier version of this line had a `T-8` doing the allocation, which would have split one record across three series. It does not.

@@ -2,6 +2,14 @@
 
 [Documentation](README.md)
 
+# The tramiciel domain
+
+- [The tramiciel domain](tramiciel/README.md)
+  - [The series](tramiciel/series.md)
+  - [The protocol](tramiciel/protocol.md)
+  - [The lexicon](tramiciel/lexicon.md)
+  - [Open questions](tramiciel/open-questions.md)
+
 # Requirements
 
 - [Requirements](requirements/README.md)

@@ -2,6 +2,8 @@
 
 Part of the [design documentation](README.md) for the Tramice721 Discord bot. Section numbers are kept from the original single-file specification so that `§n` references elsewhere in the docs stay meaningful.
 
+Five tables in Frédo's working document have no counterpart below: `Tramices`, `Wishes`, `Anon_index`, `Volios` and `Events`. The first three are the multi-tramice layer, and the document's own note asks for the datastructure to be redesigned around them. What they are for is in [`../tramiciel/protocol.md`](../tramiciel/protocol.md).
+
 ## 4. Data model
 
 Two SQLite databases plus Chroma.

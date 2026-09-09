@@ -2,6 +2,8 @@
 
 Part of the [design documentation](README.md) for the Tramice721 Discord bot. Section numbers are kept from the original single-file specification so that `§n` references elsewhere in the docs stay meaningful.
 
+This document describes one process. That process is **Tramice 7-21**, a T-7 lab tramice openly simulating a T-8, a T-0 and a set of T-1s; the network it belongs to and the rules it will have to satisfy are in [`../tramiciel/`](../tramiciel/README.md).
+
 ## 2. System overview
 
 

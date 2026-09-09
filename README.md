@@ -1,5 +1,9 @@
 # Tramice721 — Discord AI bot
 
+<p align="center">
+  <img src="docs/assets/la-trame-etoilee.jpg" alt="La Trame Étoilée — Joignez la guilde des tramarades" width="300">
+</p>
+
 ## Introduction
 ### What this project is
 
@@ -8,6 +12,12 @@ from *La Guilde des Tramarades* — not a generic chatbot wrapper. She simulates
 the personal **tramice** console: a warm, feminine, French (Québec) persona that
 helps **trammers** (community members) connect, learn the game, and participate
 in the weekly HOP cycle during the *Laboratoire tramiciel n°721* playtest.
+
+More precisely, she is **Tramice 7-21**: one tramice of the T-7 lab series, openly
+simulating three series that do not exist yet. What the other series are, how they
+are meant to talk to each other, and what every word above means is in
+[`docs/tramiciel/`](docs/tramiciel/README.md). Start there if this is your first
+visit.
 
 The bot runs entirely on your own hardware:
 
