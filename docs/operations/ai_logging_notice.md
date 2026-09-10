@@ -38,7 +38,7 @@ Des questions ? Mentionnez un admin ou écrivez à Tramice721 en DM.
 
 ## Notes pour les opérateurs
 
-1. Renseignez `channels.log_allowlist` dans [`config.yaml`](../config.yaml) avec
+1. Renseignez `channels.log_allowlist` dans [`config.yaml`](../../config.yaml) avec
    les IDs numériques des salons dont les messages doivent être journalisés.
 2. Renseignez `channels.interact_allowlist` pour les salons où le bot peut
    répondre (`!ai`, `@mention`, `/ask`). Un salon peut être journalisé sans

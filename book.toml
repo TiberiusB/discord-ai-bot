@@ -1,0 +1,19 @@
+[book]
+title = "Tramice721"
+description = "Documentation for the Tramice721 Discord bot, the tramicial lab n°721 of La Guilde des Tramarades"
+authors = ["La Guilde des Tramarades"]
+language = "en"
+src = "docs"
+
+[build]
+build-dir = "book"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/TiberiusB/discord-ai-bot"
+edit-url-template = "https://github.com/TiberiusB/discord-ai-bot/edit/master/docs/{path}"
+
+[output.html.fold]
+enable = true
+level = 1

@@ -37,7 +37,18 @@ def _splitter(chunk_tokens: int, overlap_tokens: int) -> RecursiveCharacterTextS
     )
 
 
-def _read_pdf(path: Path) -> list[Document]:
+def _source_of(path: Path, root: Path) -> str:
+    """Citation label: the path relative to ``docs/``, so two files sharing a
+    basename stay distinguishable. Four different ``README.md`` files became
+    reachable when ``docs/`` grew subfolders, and a bare name cites them all
+    identically."""
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:  # outside the tree: fall back to the name
+        return path.name
+
+
+def _read_pdf(path: Path, root: Path) -> list[Document]:
     from pypdf import PdfReader
 
     reader = PdfReader(str(path))
@@ -48,31 +59,33 @@ def _read_pdf(path: Path) -> list[Document]:
             docs.append(
                 Document(
                     page_content=text,
-                    metadata={"source": path.name, "page": page_num},
+                    metadata={"source": _source_of(path, root), "page": page_num},
                 )
             )
     return docs
 
 
-def _read_markdown(path: Path) -> list[Document]:
+def _read_markdown(path: Path, root: Path) -> list[Document]:
     text = path.read_text(encoding="utf-8", errors="ignore").strip()
     if not text:
         return []
-    return [Document(page_content=text, metadata={"source": path.name, "page": 0})]
+    return [Document(page_content=text, metadata={"source": _source_of(path, root), "page": 0})]
 
 
 def load_docs(docs_dir: Path) -> list[Document]:
-    """Load PDFs and Markdown files from ``docs/`` into LangChain Documents."""
+    """Load PDFs and Markdown files from ``docs/`` (recursively) into LangChain Documents."""
     documents: list[Document] = []
     if not docs_dir.exists():
         return documents
-    for path in sorted(docs_dir.iterdir()):
+    for path in sorted(docs_dir.rglob("*")):
+        if not path.is_file():
+            continue
         suffix = path.suffix.lower()
         try:
             if suffix == ".pdf":
-                documents.extend(_read_pdf(path))
+                documents.extend(_read_pdf(path, docs_dir))
             elif suffix in {".md", ".txt"}:
-                documents.extend(_read_markdown(path))
+                documents.extend(_read_markdown(path, docs_dir))
         except Exception:  # noqa: BLE001
             log.exception("Failed to read %s", path)
     return documents
