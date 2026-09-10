@@ -92,7 +92,7 @@ A newcomer who direct-messages the on-boarding tramice (Frédo, 2026-09-02: "a T
 - **R7.2** If they name someone, she sends a notification through that person's tramice. In the current lab, that is a DM from the bot to the named tramarade, who confirms or declines.
 - **R7.3** If they know no one, she places them on a waiting list and tells them so plainly.
 - **R7.4** No action on the server is granted before the *promesse d'utilisation conviviale* is made.
-- **R7.5** The waiting list, anonymized, is sent to a local T-8 as volios; the on-boarding tramice then intercedes. Added by Frédo, 2026-09-02.
+- **R7.5** The waiting list, anonymized, is sent to a local *tramice d'accueil*, a `T-10`, which then intercedes. Frédo's own wording, 2026-09-02.
 - **Open** Who reviews the waiting list, and on what cadence, is not decided.
 
 ## Non-functional requirements
@@ -107,7 +107,7 @@ A newcomer who direct-messages the on-boarding tramice (Frédo, 2026-09-02: "a T
 - Two unpaid part-time volunteers. Scope accordingly.
 - The datastructure redesign the working document calls for (`Tramices`, `Anon_index`, `Volios`, `Events`; `Volios` absorbs the former `Wishes`) is **not** in this version. Only the tables the tools above need are touched. Amended 2026-09-02: Frédo asked that `Volios` and `Events` not be deferred; they become the slice that follows this one, in their own PR.
 - Discord remains the only transport. The transport gateway is a later slice.
-- The tramice series work (`T-0` to `T-9`) is design, not code, in this version. See the design note for its current state.
+- The tramice series work (`T-0` to `T-10`) is design, not code, in this version. See the design note for its current state.
 
 ## Explicitly out of scope
 

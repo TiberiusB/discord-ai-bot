@@ -1,6 +1,6 @@
 # The tramiciel domain
 
-> **Sources.** Frédo's specification in the working document, tab *Spécifications _ docs*, section *En développement : l'écosystème tramiciel*; the third-pass reading of that specification dated 26 August 2026; *Un jeu pour système* and its five annexes; the lab session of 9 September 2026. Where a statement is Frédo's specification it is stated plainly. Where it is a reading offered from the development side it is marked **(reading)** and is his to accept or drop.
+> **Sources.** Frédo's specification in the working document, tab *Work in progress*, section *En développement : l'écosystème tramiciel*; the third-pass reading of that specification dated 26 August 2026; *Un jeu pour système* and its five annexes; the lab session of 9 September 2026. Where a statement is Frédo's specification it is stated plainly. Where it is a reading offered from the development side it is marked **(reading)** and is his to accept or drop.
 
 <p align="center">
   <img src="../assets/la-trame-etoilee.jpg" alt="La Trame Étoilée, joignez la guilde des tramarades" width="320">
@@ -31,7 +31,7 @@ The whole catalogue is framed as *à implémenter plus tard mais à prévoir tou
   <img src="../assets/visage-tramice.jpg" alt="The face of a tramice" width="120">
 </p>
 
-A tramice's identity is a record, not a model. Tramice 7-21 has already survived one model swap, reactivated in July 2026 *avec une nouvelle âme (LLM)*, and kept its name, its character and its memory. What underneath is swappable; what is written down is not.
+A tramice's identity is a record, not a model. Tramice 7-21 has already survived one model swap: a first version ran for some months from December 2024 before she was *réactivée avec une nouvelle âme (LLM)*, and she kept her name, her character and her memory. What underneath is swappable; what is written down is not.
 
 ## Where this repository sits
 
@@ -43,13 +43,15 @@ This repository is **one T-7**, a lab tramice, whose lab happens to be building 
 | A **T-8** wish oracle | The matchmaking service | Until the first real T-8 exists |
 | A **T-0** witness | The game-state and statistics services | Until the first real T-0 exists |
 
-**The simulation is an open fact, never a disguise.** A simulated series announces itself in every answer that depends on the difference. That is a rule, not a courtesy: the failure mode is not the pretending, it is the pretending going unlabelled, and a T-1's privacy guarantee turning out to have been a T-7 all along.
+**The simulation is an open fact, never a disguise.** The specification is explicit: *sans pour autant travestir son nom, Tramice 7-21 : la simulation est un fait ouvert, connu de tous.*
+
+**(reading)** What we would add is that the announcement belongs in the answer: a simulated series should say so in every answer that depends on the difference. The failure mode is not the pretending, it is the pretending going unlabelled, and a T-1's privacy guarantee turning out to have been a T-7 all along.
 
 ## Read in this order
 
 | Page | What it answers |
 |---|---|
-| [The ten series](series.md) | What each kind of tramice is, what it may start, what it may answer, what it may never do |
+| [The series](series.md) | What each kind of tramice is, what it may start, what it may answer, what it may never do |
 | [The protocol](protocol.md) | How a tramice comes to exist, how tramices reach each other and reach people, what stays local and what travels |
 | [The lexicon](lexicon.md) | Every term this project uses, in French and English |
 | [Open questions](open-questions.md) | What is not decided, and whose answer it is |

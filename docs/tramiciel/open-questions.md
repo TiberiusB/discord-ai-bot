@@ -1,6 +1,6 @@
 # Open questions
 
-> **Sources.** Frédo's *Questions ouvertes* list in the working document, tab *Work in progress*, marked there *à mettre en évidence quelque part dans le labo tramiciel*; the third-pass reading of 26 August 2026 and its own closing questions; Tibi's question recorded in the same document.
+> **Sources.** Frédo's *Questions ouvertes* list in the working document, tab *Work in progress*, marked there *à mettre en évidence quelque part dans le labo tramiciel*; the third-pass reading of 26 August 2026 and its own closing questions; Tibi's question recorded in the same document. Statements marked **(reading)** are proposals from the development side and are Frédo's to accept or drop.
 
 This page exists because Frédo asked for these to be visible somewhere in the lab, and a repository everyone can read is somewhere. Nothing here is answered by writing it down. Each question carries **who asked it** and **whose answer it is**, because those are not always the same person, and because the working document mixes questions in Frédo's own French voice with questions folded in from the development side in English. Where a question originated on our side it says so.
 
@@ -58,7 +58,7 @@ Frédo's founding letter names the first two things that should cross a lab boun
 
 The other half stands. A T-0 checks the number, the non-duplication and the clarity of the role, all properties of the description. Nothing says who may put a proposal in front of it.
 
-**Asked by** Tibi. **Answer belongs to** Frédo, and the warning is Tibi's: without it, capture by a minority.
+**Asked in** the bullet the working document addresses to Tibi, so most likely his. **Answer belongs to** Frédo, and the warning travels with the question: without a stated process, capture by a minority.
 
 ---
 

@@ -1,6 +1,6 @@
 # The lexicon
 
-> **Sources.** Frédo's bilingual equivalence table in the working document, tab *Work in progress*, reproduced verbatim below; his abbreviations list in the same tab; the volios directory of 25 August 2026 for the definition of *volio*; the series specification for the tramice vocabulary; *Un jeu pour système* for the game terms.
+> **Sources.** Frédo's bilingual equivalence table in the working document, tab *Work in progress*, reproduced verbatim below; his abbreviations list in the same tab; the volios directory of 25 August 2026 for the definition of *volio*; the series specification for the tramice vocabulary; *Un jeu pour système* for the game terms. His equivalence table is reproduced as he wrote it; everything after it is compiled from those sources, and any rule stated from the development side is marked **(reading)**.
 
 Frédo asked for this page. The working document carries it as a task: *Créer un lexique des termes tramiciels, comme tramarade, tramice, tramer, le terme tramiciel lui-même, etc. Y adjoindre les expressions spécifiques au Jeu [...] Both in English and French.*
 
@@ -8,17 +8,17 @@ It exists for a second reason he states separately, and it is a requirement rath
 
 > Idéalement, j'aimerais que le vocabulaire utilisé pour décrire le système aux usagers (le jeu aux joueurs, la Trame aux tramarades) soit le même, ou du moins reconnaissable, dans le code du robot. Cela par souci de transparence, que des tramarades sans notion de programmation puissent comprendre le code.
 
-So this page is not a courtesy for readers of the documentation. It is the naming authority for the code. A symbol in the bot that means *appui* should be called `appui` or `support`, consistently, and not `influence`.
+So this page is not a courtesy for readers of the documentation. **(reading)** Read as a rule for the code, that means a symbol in the bot standing for *appui* should be called `appui` or `support`, consistently, and never `influence`.
 
 ## Frédo's equivalence table
 
-Reproduced as written, English on the left, French on the right.
+Reproduced as he wrote it, with his own spellings. He wrote it English-first except for one row, *labo tramiciel*, kept below in his order.
 
 | English | French |
 |---|---|
 | tramice | tramice |
-| tramicial | tramiciel·le |
-| tramician | tramicien·ne |
+| tramicial | tramiciel.le |
+| tramician | tramicien.ne |
 | tramice number | tramicule |
 | trammer | tramarade |
 | The Fabric of Wishes | La Trame Étoilée |
@@ -33,7 +33,7 @@ Reproduced as written, English on the left, French on the right.
 | allocation of universal modicum (AUM) | allocation universelle modique (AUM) |
 | Mondo panel | fenêtre Mondo |
 | Quest | Quête |
-| labo tramiciel | tramicial lab |
+| *(written French-first)* labo tramiciel | tramicial lab |
 | promise of convivial usage | promesse d'utilisation conviviale |
 
 Note the adjective: **tramicial** in English, **tramiciel** in French. The English spelling is Frédo's own and is not a misspelling of the French one.
@@ -104,14 +104,14 @@ Everything that can hold an intention has one: tramarades, tramices, teams, even
 
 ## Renamings on record
 
-The working document records four, and code and documentation should follow them.
+The working document records three renamings and one removal, and code and documentation should follow them.
 
 | Was | Is | Where recorded |
 |---|---|---|
 | `budget d'influence` | `budget d'appui` | Task list, and throughout the rewritten persona text |
 | `investissement`, *investir* | `appui`, *appuyer* | The persona paragraph, rewritten. HOPs of appui do not pay dividends; they support missions and enterprises |
 | `trammer` in French strings | `tramarade` | Abbreviations list: *En français, 'trammer' se dit 'tramarade' et 'support' se traduit par 'appui'* |
-| `/signal`, `/son` | `/report`, `/sound` | *We decided that all commands will be in English* |
+| `/signal`, `/son` | **removed.** `/report` and `/sound` already exist separately in the target command list | *Remove: `/signal` and `/son` ~ we decided that all commands will be in English* |
 
 The current state of the command surface, and which names are agreed, is in [`../design/command_inventory.md`](../design/command_inventory.md).
 

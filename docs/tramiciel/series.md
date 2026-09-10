@@ -12,18 +12,18 @@ The suffix is arbitrary, but it is not free for the taking. It goes through veri
 
 ## In one line each
 
-Frédo's own summary, from the end of the catalogue:
+Frédo's own summary, from the end of the catalogue. It covers nine series: he does not summarise the 2s and the 3s, so those two rows are **(reading)**, filled in from his fuller entries below.
 
 | | |
 |---|---|
 | **0** | watches the vital signs, reports weekly, flags the gaps against what was expected |
 | **1** | accompanies tramarades individually |
-| **2** | draws |
-| **3** | maps the real |
+| **2** | draws **(reading)** |
+| **3** | maps the real **(reading)** |
 | **4** | archives |
 | **5** | recounts, in perpetual conversation with the tramarades, who all may contribute |
 | **6** | keeps our agreements and officiates our disagreements |
-| **7** | is the tramice of a team or a lab |
+| **7** | is the tramice of a team or a mission, *dont le Labo tramiciel n°721* |
 | **8** | matches the wishes that answer each other, and tends the emergent multilingual D'ico |
 | **9** | specialises in one field |
 | **10** | welcomes, and sees to the integration and sponsorship of new tramarades |
@@ -178,7 +178,9 @@ They keep the stories local to them, and mirror-propagate the emergent global st
 |---|---|
 | May initiate | Messages to its members' consoles, which those consoles filter |
 | May answer | Its lab's members, about the lab's work and vocabulary |
-| May never | Write to a member's console. It requests; the console's holder approves |
+| May never | Publish a member's private material, or route around the filter that member's own console applies |
+
+**(reading)** What crosses that channel should be a **request**, never a write: a lab asking your console to change your volio produces something you approve, not something that has already happened. The specification grants the send and puts the filter on the receiving T-1; the request-not-write rule is ours, and it is stated as such in [the protocol](protocol.md#5-the-channel-between-a-console-and-a-lab).
 
 **Status.** **This repository.** One T-7, openly simulating a T-8, a T-0 and a set of T-1s.
 
@@ -244,7 +246,7 @@ They also carry a training module for new tramarades, and the specification pair
 
 **Status.** Does not exist. The sponsorship flow it would run is currently manual.
 
-**A note on the number.** The specification states the T-10 mapping flatly in French. An earlier and still-present draft of the same rule, in English, writes it hesitantly: *a newcomer who direct-messages an On-boarding Tramice (a T-10 ??)*. Both passages describe the same flow. The hesitant one appears to be the earlier draft; if the number is not settled, the French paragraph is the one to correct.
+**A note on the number.** The working document carries the same enrolment flow twice: flatly in French, and hesitantly in English, *a newcomer who direct-messages an On-boarding Tramice (a T-10 ??)*. Which of the two is the later word is not settled here: [`../requirements/reliability.md`](../requirements/reliability.md) dates the English one to Frédo on 2026-09-02, which would make it the more recent, while it reads as the more tentative. The number is therefore **to confirm with Frédo** rather than to correct on either passage's authority.
 
 ## Where the numbering stops
 

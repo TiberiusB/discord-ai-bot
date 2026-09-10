@@ -73,7 +73,9 @@ The convivial-use promise is a hard gate, not a formality. It is the only thing 
 
 ## 4. Who may speak first
 
-Ten of the eleven series are not peers. The distinction that matters is not what a tramice knows but what it is allowed to initiate.
+The eleven series are not peers. The distinction that matters is not what a tramice knows but what it is allowed to initiate.
+
+**(reading)** The four classes below are our way of reading his catalogue, not a grouping he states. Each row's rule is his; the grouping is ours.
 
 | Class | Series | May start a conversation? |
 |---|---|---|
@@ -82,11 +84,13 @@ Ten of the eleven series are not peers. The distinction that matters is not what
 | **Subscription** | T-5 | Yes, and only because the reader subscribed, and can unsubscribe |
 | **Threshold** | T-10 | Answers a newcomer's first message, and reaches a sponsor through that sponsor's own tramice |
 
-Two series break the tiering and both breaks are deliberate. **T-5 initiates**, which no other service does, but only toward someone who asked it to. **T-6 acts on the world**: it convenes juries, allocates space with the T-3s, redistributes teams that split. It is the only series with executive power, and putting it there rather than in T-0 is what keeps the watcher from becoming the judge.
+Two series break the tiering and both breaks are deliberate. **T-5 initiates**, which no other service does, but only toward someone who asked it to. **T-6 acts on the world**: it convenes juries, allocates space with the T-3s, redistributes teams that split. It is the only series with executive power. **(reading)** Putting it there rather than in T-0 is what keeps the watcher from becoming the judge, and it is the load-bearing separation in the whole catalogue.
 
 Full per-series detail is in [the catalogue](series.md).
 
 ### Raw or interpreted, and the choice is the reader's
+
+**(reading)** This whole subsection is ours, and it reads *with* the specification rather than from it: Frédo says a tramarade should be able to live entirely in their console, and what follows adds that going direct should stay possible for anyone checking the system.
 
 A person can always go straight to a service. Ask a T-8 directly and the answer is the generic core of the Trame: raw, true of everyone and about no one in particular. Ask through your T-1, or your lab's T-7, and the same answer arrives with a layer of interpretation shaped by who you are or what your team is doing.
 
@@ -154,7 +158,7 @@ That is the clearest statement in the corpus that the protocol is implemented on
 
 Three invariants follow, and none of them is achieved by writing a better prompt.
 
-**Identity lives in the record, not in the model.** A tramice is a record with an immutable tramicule, a versioned persona, a memory scope, a tool scope, and a swappable model underneath. Tramice 7-21 has already survived one model swap, reactivated in July 2026 *avec une nouvelle âme (LLM)*, and kept its name and its character. That is the proof that identity cannot be a property of the model.
+**Identity lives in the record, not in the model.** A tramice is a record with an immutable tramicule, a versioned persona, a memory scope, a tool scope, and a swappable model underneath. Tramice 7-21 has already survived one model swap: a first version ran for some months from December 2024 before she was *réactivée avec une nouvelle âme (LLM)*, and she kept her name and her character. That is the proof that identity cannot be a property of the model.
 
 **Personality is pinned and regression-tested.** The same persona behaves differently under a different model, so character needs tests. Annexe D of the game design supplies them: she always speaks of herself in the feminine, she answers *« Bonté divine, j'espère bien que non ! »* when asked whether she is a virus, she discloses her own prompt, and she acknowledges neutral information without commenting. Drift becomes a failing test rather than something someone notices six weeks later. The set this repository runs is in [`../testing/acceptance_questions.md`](../testing/acceptance_questions.md).
 
@@ -169,6 +173,8 @@ Approved by Frédo and Soushi, 25 August 2026, and it is the same exemption the 
 The governing principle above all of it, from the project's own front matter: ***L'IA propose, la communauté dispose.***
 
 ## 10. Reaching people where they are
+
+**(reading)** This section is ours end to end. The specification asks for other transports and for a swappable model; the two-gateway split, the intent-and-adapter rule and the consent-linked resolver are how we propose to build it.
 
 Swapping the model and swapping the client are the same move applied to different edges. The project wants both, and confusing them produces a mess. Both belong to the Trame rather than to any one tramice.
 
@@ -188,7 +194,7 @@ That resolver is R1.2 of the current slice in [`../requirements/reliability.md`]
 
 ## 11. The tables that do not exist yet
 
-Five tables in the working document have no counterpart in the running bot: `Tramices`, `Wishes`, `Anon_index`, `Volios` and `Events`. The first three are the multi-tramice layer. The note at the head of the table list is explicit: *use this information to completely redesign the datastructure*.
+Five tables in the working document have no counterpart in the running bot: `Tramices`, `Wishes`, `Anon_index`, `Volios` and `Events`. The first three are the multi-tramice layer. The note at the head of the table list is explicit: *Use this information to completely redesign the database (datastructure)*.
 
 That redesign is the first piece of shared runtime work and it is prior to every series after this lab. The bot's current schema is in [`../design/data-model.md`](../design/data-model.md).
 
@@ -198,7 +204,7 @@ The problem of an assistant whose character outlives its model has been solved e
 
 **(reading)** That last one is the useful find, because it turns *L'IA propose, la communauté dispose* from a sentence of prose into an enforceable field. It is what makes the console-to-lab channel safe, and it is where T-4's *ne s'adressent pas à nous en premier* and T-5's subscription both belong.
 
-Four things change when the principal is a community rather than one person.
+**(reading)** Everything from here to the end of the page is ours. Four things change when the principal is a community rather than one person.
 
 - **Authority becomes a field.** Who may propose and who may adopt. The vocabulary already exists in the game: the 80% threshold, the rule letting local groups add stricter rules, and `/game` requiring the `@Architecture` role **plus** a majority.
 - **Visibility goes per entry, not per tree.** The charter and the emergent D'ico are public by design while a console is private by design, and a D'ico term can be marked private inside an otherwise shared dictionary.
