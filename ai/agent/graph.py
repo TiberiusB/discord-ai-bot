@@ -144,7 +144,7 @@ class AgentResponder:
                 if rows:
                     parts.append("## Activité récente du fil")
                     parts.extend(
-                        f"{r.get('user_name') or r.get('user_id')}: {r.get('content', '')[:200]}"
+                        f"{r['user_name'] or r['user_id']}: {(r['content'] or '')[:200]}"
                         for r in rows
                     )
             except Exception:  # noqa: BLE001

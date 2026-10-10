@@ -112,7 +112,7 @@ Discord (salons · DMs · slash commands)
 
 | Component | Minimum |
 |-----------|---------|
-| Python | 3.12 |
+| Python | 3.12+ (3.14 on Ubuntu 26.04) |
 | Ollama | installed and running (`ollama serve`) |
 | RAM | ~15 GB (CPU-only); 7B models are the practical ceiling |
 | GPU | optional; significantly speeds inference |
@@ -501,6 +501,7 @@ Set `LOG_JSON=1` in production for structured turn and job logging.
 
 | Symptom | Check |
 |---------|-------|
+| `No module named 'discord'` after an OS upgrade | Recreate the venv: `rm -rf venv && ./run.sh` (or `python3 -m venv --without-pip venv` then `python3 -m pip --python venv/bin/python install -r requirements.txt`). Ubuntu 26.04 ships Python 3.14; the old 3.12 venv is unusable. |
 | Bot exits immediately | `DISCORD_TOKEN` set in `.env`? Check logs for `LoginFailure` or `PrivilegedIntentsRequired` |
 | Bot ignores salon messages | Channel in `channels.interact_allowlist`? (DMs always work) |
 | ToDo salon: no bot replies | Channel may be log-only — use `/todo`; not in `interact_allowlist` |
