@@ -1,6 +1,6 @@
 # Implementation Status — Tramice721 Discord Bot
 
-> Last updated: 17 July 2026  
+> Last updated: 10 October 2026  
 > Audience: developers joining or continuing work on this repository.
 
 ---
@@ -198,6 +198,19 @@ Allowlist and `summary_channel_id` are configured for the lab server. Broader
 playtest flows (daily summary quality, weekly game cycle with many tramarades)
 remain Phase 1 work — see [`planning.md`](planning.md).
 
+### Runtime repair (October 2026)
+
+Ubuntu 26.04 ships Python 3.14 without `ensurepip`. A venv created under the
+previous interpreter (3.12) then fails with `No module named 'discord'`.
+`run.sh` treats the environment as broken when `venv/bin/python` is missing or
+cannot import `discord`, removes it, and recreates it. If `ensurepip` is
+absent, creation uses `python3 -m venv --without-pip` and bootstraps pip with
+`python3 -m pip --python venv/bin/python` before installing `requirements.txt`.
+
+Procedural agent context (`AgentResponder._build_procedural_context`) also
+tolerates a logged message whose `content` is null when building the
+recent-thread lines.
+
 ---
 
 ## Architecture (as implemented)
@@ -360,7 +373,7 @@ Jobs log duration and outcome via `log_job()`.
 
 | Asset | Status |
 |-------|--------|
-| `run.sh` | venv bootstrap + run |
+| `run.sh` | venv bootstrap + run; recreates a broken venv after an OS/Python upgrade; bootstraps pip when `ensurepip` is absent (Ubuntu 26.04 / Python 3.14) |
 | `deploy/tramice721.service` | systemd unit with `EnvironmentFile` |
 | `Dockerfile` + `docker-compose.yml` | Ollama sidecar, model init, healthchecks |
 | `scripts/healthcheck.py` | Heartbeat probe (`data/.health`) |
@@ -429,6 +442,7 @@ needing operator decisions — not blockers for a controlled first playtest.
 Initial connect checklist is **complete** for the lab guild. Ongoing ops:
 
 1. Keep `ollama serve` and the bot process running (`./run.sh`, systemd, or Docker).
+   After an OS Python upgrade, `./run.sh` recreates a venv that can no longer import `discord`.
 2. Maintain `channels.interact_allowlist` and `channels.log_allowlist` as salons evolve.
 3. Keep the AI-logging notice visible ([`ai_logging_notice.md`](../operations/ai_logging_notice.md)).
 4. Before releases: `PYTHONPATH=. pytest tests/ -q`, then smoke `/ask` + `/health`.
